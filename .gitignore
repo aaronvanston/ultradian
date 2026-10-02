@@ -1,0 +1,19 @@
+# Dependencies and build output
+node_modules/
+dist/
+
+# Environment and credentials — never commit real values
+.env
+.env.*
+!.env.example
+
+# Test and tooling output
+coverage/
+*.tsbuildinfo
+*.log
+
+# Machine-local agent settings
+.claude/settings.local.json
+
+# OS cruft
+.DS_Store
