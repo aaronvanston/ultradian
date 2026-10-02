@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400" role="img" aria-label="ultradian: gated schedules for invoking AI. Most ticks are cheap checks that find nothing; now and then the gate opens and an agent runs.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1017"/>
+      <stop offset="1" stop-color="#151a29"/>
+    </linearGradient>
+    <linearGradient id="pulse" gradientUnits="userSpaceOnUse" x1="0" y1="318" x2="0" y2="212">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#f472d0"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#ffffff" stroke-opacity="0.035"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="400" rx="20" fill="url(#bg)"/>
+  <rect width="1280" height="400" rx="20" fill="url(#grid)"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace">
+    <text x="70" y="94" fill="#f472d0" font-size="28" font-weight="700">◆</text>
+    <text x="106" y="100" fill="#e6e9f0" font-size="56" font-weight="700" letter-spacing="-1">ultradian</text>
+    <text x="74" y="140" fill="#9aa3b5" font-size="22">Gated schedules for invoking AI</text>
+    <text x="74" y="180" fill="#6b7489" font-size="17"><tspan fill="#22d3ee">$</tspan> udian add triage --cron "0 * * * *" --gate ./check.sh -- claude -p "…"</text>
+  </g>
+  <line x1="72" y1="318.5" x2="1208" y2="318.5" stroke="#262c3a" stroke-width="1"/>
+  <line x1="72.0" y1="318" x2="72.0" y2="303.7" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="88.0" y1="318" x2="88.0" y2="304.5" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="104.0" y1="318" x2="104.0" y2="300.5" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="120.0" y1="318" x2="120.0" y2="304.1" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="136.0" y1="318" x2="136.0" y2="300.4" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="152.0" y1="318" x2="152.0" y2="301.1" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="168.0" y1="318" x2="168.0" y2="302.9" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="184.0" y1="318" x2="184.0" y2="299.3" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="200.0" y1="318" x2="200.0" y2="302.3" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="216.0" y1="318" x2="216.0" y2="299.2" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="232.0" y1="318" x2="232.0" y2="301.4" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="248.0" y1="318" x2="248.0" y2="301.0" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="264.0" y1="318" x2="264.0" y2="298.5" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="280.0" y1="318" x2="280.0" y2="212.5" stroke="url(#pulse)" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="280.0" cy="212.5" r="16" fill="#f472d0" opacity="0.16"/>
+  <circle cx="280.0" cy="212.5" r="6" fill="#f472d0"/>
+  <line x1="296.0" y1="318" x2="296.0" y2="295.3" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="312.0" y1="318" x2="312.0" y2="300.2" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="328.0" y1="318" x2="328.0" y2="299.4" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="344.0" y1="318" x2="344.0" y2="296.6" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="360.0" y1="318" x2="360.0" y2="294.4" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="376.0" y1="318" x2="376.0" y2="297.1" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="392.0" y1="318" x2="392.0" y2="298.5" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="408.0" y1="318" x2="408.0" y2="294.7" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="424.0" y1="318" x2="424.0" y2="301.4" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="440.0" y1="318" x2="440.0" y2="296.0" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="456.0" y1="318" x2="456.0" y2="300.3" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="472.0" y1="318" x2="472.0" y2="301.6" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="488.0" y1="318" x2="488.0" y2="302.2" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="504.0" y1="318" x2="504.0" y2="301.2" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="520.0" y1="318" x2="520.0" y2="298.1" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="536.0" y1="318" x2="536.0" y2="303.0" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="552.0" y1="318" x2="552.0" y2="300.6" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="568.0" y1="318" x2="568.0" y2="220.3" stroke="url(#pulse)" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="568.0" cy="220.3" r="16" fill="#f472d0" opacity="0.16"/>
+  <circle cx="568.0" cy="220.3" r="6" fill="#f472d0"/>
+  <line x1="584.0" y1="318" x2="584.0" y2="301.2" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="600.0" y1="318" x2="600.0" y2="303.3" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="616.0" y1="318" x2="616.0" y2="301.6" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="632.0" y1="318" x2="632.0" y2="304.5" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="648.0" y1="318" x2="648.0" y2="304.0" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="664.0" y1="318" x2="664.0" y2="302.6" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="680.0" y1="318" x2="680.0" y2="298.8" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="696.0" y1="318" x2="696.0" y2="300.2" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="712.0" y1="318" x2="712.0" y2="300.6" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="728.0" y1="318" x2="728.0" y2="298.3" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="744.0" y1="318" x2="744.0" y2="298.9" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="760.0" y1="318" x2="760.0" y2="299.7" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="776.0" y1="318" x2="776.0" y2="296.0" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="792.0" y1="318" x2="792.0" y2="296.5" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="808.0" y1="318" x2="808.0" y2="299.5" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="824.0" y1="318" x2="824.0" y2="297.1" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="840.0" y1="318" x2="840.0" y2="297.4" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="856.0" y1="318" x2="856.0" y2="294.9" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="872.0" y1="318" x2="872.0" y2="295.9" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="888.0" y1="318" x2="888.0" y2="299.1" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="904.0" y1="318" x2="904.0" y2="212.4" stroke="url(#pulse)" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="904.0" cy="212.4" r="16" fill="#f472d0" opacity="0.16"/>
+  <circle cx="904.0" cy="212.4" r="6" fill="#f472d0"/>
+  <line x1="920.0" y1="318" x2="920.0" y2="294.5" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="936.0" y1="318" x2="936.0" y2="300.7" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="952.0" y1="318" x2="952.0" y2="298.9" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="968.0" y1="318" x2="968.0" y2="296.8" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="984.0" y1="318" x2="984.0" y2="301.3" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="1000.0" y1="318" x2="1000.0" y2="299.3" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="1016.0" y1="318" x2="1016.0" y2="302.8" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="1032.0" y1="318" x2="1032.0" y2="298.8" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="1048.0" y1="318" x2="1048.0" y2="298.6" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="1064.0" y1="318" x2="1064.0" y2="300.4" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="1080.0" y1="318" x2="1080.0" y2="219.7" stroke="url(#pulse)" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="1080.0" cy="219.7" r="16" fill="#f472d0" opacity="0.16"/>
+  <circle cx="1080.0" cy="219.7" r="6" fill="#f472d0"/>
+  <line x1="1096.0" y1="318" x2="1096.0" y2="299.2" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="1112.0" y1="318" x2="1112.0" y2="303.6" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="1128.0" y1="318" x2="1128.0" y2="300.9" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="1144.0" y1="318" x2="1144.0" y2="301.1" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="1160.0" y1="318" x2="1160.0" y2="300.7" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="1176.0" y1="318" x2="1176.0" y2="301.1" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="1192.0" y1="318" x2="1192.0" y2="298.0" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <line x1="1208.0" y1="318" x2="1208.0" y2="296.8" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="15">
+    <line x1="72" y1="358" x2="92" y2="358" stroke="#4a5368" stroke-width="3" stroke-linecap="round"/>
+    <text x="104" y="363" fill="#8a93a6">clean: the check found nothing</text>
+    <line x1="404" y1="358" x2="424" y2="358" stroke="#f472d0" stroke-width="4" stroke-linecap="round"/>
+    <text x="436" y="363" fill="#8a93a6">the gate opened and the agent ran</text>
+  </g>
+</svg>

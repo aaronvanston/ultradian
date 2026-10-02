@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/banner.svg" alt="ultradian: most ticks are cheap checks that find nothing; now and then the gate opens and an agent runs" width="100%"></p>
+
 # Ultradian
 
 Gated schedules and workflows for invoking AI. Ultradian runs cron loops on a machine, puts cheap deterministic checks in front of agent and LLM invocations, and records how every loop is going.
