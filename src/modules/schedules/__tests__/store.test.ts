@@ -56,13 +56,119 @@ describe("schema migrations", () => {
     expect(() => new ScheduleStore(home)).toThrow(/newer than this release/u);
   });
 
-  test("refuses an unversioned database instead of guessing its shape", () => {
+  // The shape 0.1.x wrote, before schemas were versioned. 'extra' lets a
+  // test add the columns later 0.1 builds grew.
+  const legacyDatabase = (extra: {
+    schedules: string;
+    runs: string;
+  }): string => {
     const home = mkdtempSync(path.join(os.tmpdir(), "ultradian-store-"));
     homes.push(home);
     const raw = new Database(path.join(home, "ultradian.db"));
-    raw.run("CREATE TABLE schedules (id TEXT PRIMARY KEY)");
+    raw.run(`CREATE TABLE schedules (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+      trigger_kind TEXT NOT NULL, trigger_value TEXT, gate TEXT,
+      command TEXT NOT NULL, working_directory TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active', created_at INTEGER NOT NULL,
+      next_fire_at INTEGER${extra.schedules})`);
+    raw.run(`CREATE TABLE runs (
+      id TEXT PRIMARY KEY, schedule_id TEXT NOT NULL,
+      schedule_name TEXT NOT NULL, machine_id TEXT NOT NULL, executor TEXT,
+      trigger TEXT NOT NULL, status TEXT NOT NULL, gate_exit INTEGER,
+      action_exit INTEGER, started_at INTEGER NOT NULL, finished_at INTEGER,
+      log_pointer TEXT, owner_pid INTEGER NOT NULL${extra.runs})`);
+    raw.run(
+      "CREATE INDEX runs_by_schedule ON runs (schedule_name, started_at DESC)"
+    );
+    raw.run(`CREATE TABLE daemon (id INTEGER PRIMARY KEY CHECK (id = 1),
+      pid INTEGER NOT NULL, started_at INTEGER NOT NULL,
+      heartbeat_at INTEGER NOT NULL)`);
     raw.close();
-    expect(() => new ScheduleStore(home)).toThrow(/predates versioned/u);
+    return home;
+  };
+
+  test("carries a 0.1 database over with its schedules and run history", () => {
+    const home = legacyDatabase({
+      runs: ", working_directory TEXT, child_pid INTEGER",
+      schedules:
+        ", timeout_ms INTEGER, schedule_group TEXT, kind TEXT NOT NULL DEFAULT 'schedule'",
+    });
+    const raw = new Database(path.join(home, "ultradian.db"));
+    raw.run(`INSERT INTO schedules (id, name, trigger_kind, trigger_value,
+      gate, command, working_directory, status, timeout_ms, schedule_group,
+      created_at, next_fire_at, kind) VALUES
+      ('s1', 'tick', 'cron', '0 * * * *', 'true', '["echo","ok"]', '/tmp',
+       'paused', 60000, 'ops', 1000, 5000, 'schedule')`);
+    raw.run(`INSERT INTO runs (id, schedule_id, schedule_name, machine_id,
+      executor, trigger, status, gate_exit, action_exit, started_at,
+      finished_at, log_pointer, owner_pid, working_directory, child_pid)
+      VALUES
+      ('r2', 's1', 'tick', 'box', 'echo', 'manual', 'failed', 0, 1, 3000,
+       3100, '/logs/r2.log', 42, '/tmp', 7),
+      ('r1', 's1', 'tick', 'box', 'echo', 'scheduled', 'succeeded', 0, 0,
+       2000, 2100, '/logs/r1.log', 42, '/tmp', NULL)`);
+    raw.run("INSERT INTO daemon VALUES (1, 4242, 900, 950)");
+    raw.close();
+
+    const store = new ScheduleStore(home);
+    const schedule = store.getSchedule("tick");
+    expect(schedule).toMatchObject({
+      command: ["echo", "ok"],
+      gate: "true",
+      group: "ops",
+      id: "s1",
+      nextFireAt: 5000,
+      status: "paused",
+      timeoutMs: 60_000,
+      trigger: { expression: "0 * * * *", kind: "cron" },
+      workingDirectory: "/tmp",
+    });
+    const runs = store.exportRuns();
+    expect(runs.map((run) => run.id)).toEqual(["r1", "r2"]);
+    expect(runs[1]).toMatchObject({
+      actionExit: 1,
+      logPointer: "/logs/r2.log",
+      status: "failed",
+      trigger: "manual",
+    });
+    expect(store.readDaemon()).toMatchObject({ pid: 4242, version: "0.1" });
+    store.close();
+
+    const reopened = new Database(path.join(home, "ultradian.db"));
+    expect(
+      reopened.query<{ user_version: number }, []>("PRAGMA user_version").get()
+        ?.user_version
+    ).toBe(schemaVersion);
+    expect(
+      reopened
+        .query<{ name: string }, []>(
+          "SELECT name FROM sqlite_master WHERE name LIKE 'legacy_%'"
+        )
+        .all()
+    ).toEqual([]);
+    reopened.close();
+  });
+
+  test("carries over the earliest 0.1 shape, filling what it lacked", () => {
+    const home = legacyDatabase({ runs: "", schedules: "" });
+    const raw = new Database(path.join(home, "ultradian.db"));
+    raw.run(`INSERT INTO schedules (id, name, trigger_kind, trigger_value,
+      gate, command, working_directory, created_at, next_fire_at) VALUES
+      ('s1', 'tick', 'interval', '15m', NULL, '["true"]', '/srv', 1000, 2000)`);
+    raw.run(`INSERT INTO runs (id, schedule_id, schedule_name, machine_id,
+      trigger, status, started_at, owner_pid) VALUES
+      ('r1', 's1', 'tick', 'box', 'scheduled', 'clean', 1500, 42)`);
+    raw.close();
+
+    const store = new ScheduleStore(home);
+    expect(store.getSchedule("tick")).toMatchObject({
+      group: null,
+      status: "active",
+      timeoutMs: null,
+      trigger: { kind: "every", seconds: 900 },
+    });
+    expect(store.getRun("r1")?.workingDirectory).toBe("/srv");
+    store.close();
   });
 });
 

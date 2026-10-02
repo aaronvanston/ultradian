@@ -1,6 +1,6 @@
 # ultradian command reference
 
-Generated from command descriptors for ultradian 0.2.0.
+Generated from command descriptors for ultradian 0.2.1.
 
 Gated schedules and workflows for invoking AI
 

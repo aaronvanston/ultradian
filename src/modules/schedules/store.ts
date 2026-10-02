@@ -302,6 +302,91 @@ const userVersion = (db: Database): number =>
   db.query<{ user_version: number }, []>("PRAGMA user_version").get()
     ?.user_version ?? 0;
 
+const tableColumns = (db: Database, table: string): Set<string> =>
+  new Set(
+    db
+      .query<{ name: string }, [string]>(
+        "SELECT name FROM pragma_table_info(?)"
+      )
+      .all(table)
+      .map((row) => row.name)
+  );
+
+// A column the table has, or a fallback expression when it lacks one.
+const columnOr = (
+  columns: Set<string>,
+  name: string,
+  fallback: string
+): string => (columns.has(name) ? name : fallback);
+
+// Databases written before schemas were versioned (0.1.x) carry the same
+// three tables in an older shape, grown column by column. They are carried
+// into the first versioned shape in place, schedules and run history
+// included: the old tables step aside, step 1 builds the new ones, rows are
+// copied across with defaults for what the old shape lacked, and the old
+// tables go. Columns an even older build never added read as their default.
+const upgradeLegacy = (db: Database): void => {
+  const schedules = tableColumns(db, "schedules");
+  const runs = tableColumns(db, "runs");
+  const daemon = tableColumns(db, "daemon");
+  db.run("DROP INDEX IF EXISTS runs_by_schedule");
+  db.run("ALTER TABLE schedules RENAME TO legacy_schedules");
+  if (runs.size > 0) {
+    db.run("ALTER TABLE runs RENAME TO legacy_runs");
+  }
+  if (daemon.size > 0) {
+    db.run("ALTER TABLE daemon RENAME TO legacy_daemon");
+  }
+  // 0.1 kept an interval as the duration typed ('15m'); now it is seconds.
+  // add validated it as digits then one of s, m, h or d.
+  const intervalSeconds = `CAST(substr(trigger_value, 1, length(trigger_value) - 1) AS INTEGER) *
+    CASE substr(trigger_value, -1) WHEN 'd' THEN 86400 WHEN 'h' THEN 3600
+      WHEN 'm' THEN 60 ELSE 1 END`;
+  const [first] = migrations;
+  first?.(db);
+  db.run(`
+    INSERT INTO schedules
+      (id, name, kind, schedule_group, trigger_kind, trigger_value, gate,
+       command, working_directory, status, timeout_ms, created_at,
+       updated_at, next_fire_at)
+    SELECT id, name, ${columnOr(schedules, "kind", "'schedule'")},
+      ${columnOr(schedules, "schedule_group", "NULL")},
+      CASE trigger_kind WHEN 'interval' THEN 'every' ELSE trigger_kind END,
+      CASE trigger_kind WHEN 'interval' THEN ${intervalSeconds}
+        ELSE trigger_value END,
+      gate, command, working_directory, status,
+      ${columnOr(schedules, "timeout_ms", "NULL")}, created_at, created_at,
+      next_fire_at
+    FROM legacy_schedules`);
+  if (runs.size > 0) {
+    // Copied oldest first, so the revision triggers number history in the
+    // order it happened and a follower starting from zero reads it in order.
+    const workingDirectory = runs.has("working_directory")
+      ? "working_directory"
+      : "(SELECT working_directory FROM legacy_schedules s WHERE s.id = r.schedule_id)";
+    db.run(`
+      INSERT INTO runs
+        (id, schedule_id, schedule_name, machine_id, working_directory,
+         executor, trigger, status, gate_exit, action_exit, started_at,
+         finished_at, log_pointer, owner_pid)
+      SELECT id, schedule_id, schedule_name, machine_id, ${workingDirectory},
+        executor, trigger, status, gate_exit, action_exit, started_at,
+        finished_at, log_pointer, owner_pid
+      FROM legacy_runs r ORDER BY started_at, rowid`);
+    db.run("DROP TABLE legacy_runs");
+  }
+  if (daemon.size > 0) {
+    // A 0.1 daemon may still be running. Keeping its row keeps the
+    // single-instance lock on it, so a newer daemon refuses to start beside
+    // it and 'daemon stop' or 'restart' can still reach it.
+    db.run(`
+      INSERT INTO daemon (id, pid, version, started_at, heartbeat_at)
+      SELECT id, pid, '0.1', started_at, heartbeat_at FROM legacy_daemon`);
+    db.run("DROP TABLE legacy_daemon");
+  }
+  db.run("DROP TABLE legacy_schedules");
+};
+
 const migrate = (db: Database, file: string): void => {
   const apply = db.transaction((): void => {
     const current = userVersion(db);
@@ -313,23 +398,13 @@ const migrate = (db: Database, file: string): void => {
         message: `${file} is at schema version ${current}, newer than this release understands (${schemaVersion}).`,
       });
     }
-    if (current === 0) {
-      const legacy = db
-        .query<{ name: string }, []>(
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schedules'"
-        )
-        .get();
-      if (legacy !== null) {
-        throw new AppError({
-          code: "database_unversioned",
-          exitCode: ExitCode.CONFIG,
-          hint: `Move ${file} aside and run the command again to start a fresh database.`,
-          message: `${file} predates versioned schemas and cannot be upgraded in place.`,
-        });
-      }
+    let start = current;
+    if (current === 0 && tableColumns(db, "schedules").size > 0) {
+      upgradeLegacy(db);
+      start = 1;
     }
     for (const [index, step] of migrations.entries()) {
-      if (index >= current) {
+      if (index >= start) {
         step(db);
       }
     }
