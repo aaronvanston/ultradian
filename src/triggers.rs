@@ -1,7 +1,67 @@
 //! What makes a schedule fire: cron expressions in a zone, fixed intervals,
 //! or nothing (manual). Durations are parsed here too.
 
+use chrono::{DateTime, Local, TimeZone, Utc};
+use croner::Cron;
+use croner::parser::{CronParser, Seconds, Year};
+use serde::Serialize;
+use serde::ser::{SerializeStruct, Serializer};
+
 use crate::errors::AppError;
+
+/// When a schedule fires. A cron trigger with no zone reads its expression
+/// in the machine's local time.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Trigger {
+    Cron {
+        expression: String,
+        timezone: Option<String>,
+    },
+    Every {
+        seconds: i64,
+    },
+    Manual,
+}
+
+// Records print a trigger as 0.2.1 did: its fields alphabetically, `kind`
+// among them.
+impl Serialize for Trigger {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Cron {
+                expression,
+                timezone,
+            } => {
+                let mut record = serializer.serialize_struct("Trigger", 3)?;
+                record.serialize_field("expression", expression)?;
+                record.serialize_field("kind", "cron")?;
+                record.serialize_field("timezone", timezone)?;
+                record.end()
+            }
+            Self::Every { seconds } => {
+                let mut record = serializer.serialize_struct("Trigger", 2)?;
+                record.serialize_field("kind", "every")?;
+                record.serialize_field("seconds", seconds)?;
+                record.end()
+            }
+            Self::Manual => {
+                let mut record = serializer.serialize_struct("Trigger", 1)?;
+                record.serialize_field("kind", "manual")?;
+                record.end()
+            }
+        }
+    }
+}
+
+impl Trigger {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Cron { .. } => "cron",
+            Self::Every { .. } => "every",
+            Self::Manual => "manual",
+        }
+    }
+}
 
 const UNITS: [(char, i64); 4] = [
     ('d', 86_400_000),
@@ -61,6 +121,111 @@ pub fn format_seconds(seconds: i64) -> String {
     format!("{seconds}s")
 }
 
+/// Checks a --tz value and returns the zone's own spelling, so
+/// `australia/sydney` is stored as `Australia/Sydney`.
+pub fn require_timezone(zone: &str) -> Result<String, AppError> {
+    chrono_tz::Tz::from_str_insensitive(zone)
+        .map(|tz| tz.name().to_owned())
+        .map_err(|_| {
+            AppError::usage("invalid_timezone", format!("Unknown time zone \"{zone}\"."))
+                .hint("Use an IANA zone name such as Australia/Sydney or America/New_York.")
+        })
+}
+
+fn cron_parser() -> CronParser {
+    // croner's defaults, as in JavaScript: optional seconds and year, day of
+    // month and day of week combined with OR.
+    CronParser::builder()
+        .seconds(Seconds::Optional)
+        .year(Year::Optional)
+        .build()
+}
+
+fn parse_cron(expression: &str) -> Result<Cron, AppError> {
+    cron_parser().parse(expression).map_err(|error| {
+        AppError::usage(
+            "invalid_cron",
+            format!("Invalid cron expression \"{expression}\": {error}"),
+        )
+    })
+}
+
+/// The trigger the --cron, --every and --tz flags describe.
+pub fn parse_trigger(
+    cron: Option<&str>,
+    every: Option<&str>,
+    tz: Option<&str>,
+) -> Result<Trigger, AppError> {
+    if tz.is_some() && cron.is_none() {
+        return Err(AppError::usage(
+            "timezone_requires_cron",
+            "--tz applies to --cron triggers only.",
+        ));
+    }
+    if cron.is_some() && every.is_some() {
+        return Err(AppError::usage(
+            "conflicting_triggers",
+            "Use either --cron or --every, not both.",
+        ));
+    }
+    if let Some(expression) = cron {
+        let timezone = tz.map(require_timezone).transpose()?;
+        parse_cron(expression)?;
+        return Ok(Trigger::Cron {
+            expression: expression.to_owned(),
+            timezone,
+        });
+    }
+    if let Some(every) = every {
+        return Ok(Trigger::Every {
+            seconds: parse_duration(every)? / 1000,
+        });
+    }
+    Ok(Trigger::Manual)
+}
+
+pub fn describe_trigger(trigger: &Trigger) -> String {
+    match trigger {
+        Trigger::Cron {
+            expression,
+            timezone: None,
+        } => format!("cron {expression}"),
+        Trigger::Cron {
+            expression,
+            timezone: Some(zone),
+        } => format!("cron {expression} ({zone})"),
+        Trigger::Every { seconds } => format!("every {}", format_seconds(*seconds)),
+        Trigger::Manual => "manual".into(),
+    }
+}
+
+fn next_in<Z: TimeZone>(cron: &Cron, zone: &Z, from_ms: i64) -> Option<i64> {
+    let from: DateTime<Z> = zone.timestamp_millis_opt(from_ms).single()?;
+    cron.find_next_occurrence(&from, false)
+        .ok()
+        .map(|next| next.timestamp_millis())
+}
+
+/// The first fire strictly after `from_ms`, or none for a manual trigger
+/// (or a cron expression with no time left, such as a past year).
+pub fn next_fire_at(trigger: &Trigger, from_ms: i64) -> Option<i64> {
+    match trigger {
+        Trigger::Cron {
+            expression,
+            timezone,
+        } => {
+            let cron = parse_cron(expression).ok()?;
+            match timezone.as_deref().map(chrono_tz::Tz::from_str_insensitive) {
+                Some(Ok(zone)) => next_in(&cron, &zone, from_ms),
+                Some(Err(_)) => next_in(&cron, &Utc, from_ms),
+                None => next_in(&cron, &Local, from_ms),
+            }
+        }
+        Trigger::Every { seconds } => Some(from_ms + seconds * 1000),
+        Trigger::Manual => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -101,5 +266,88 @@ mod tests {
         assert_eq!(format_seconds(86_400), "1d");
         assert_eq!(format_seconds(90), "90s");
         assert_eq!(format_seconds(0), "0s");
+    }
+}
+
+#[cfg(test)]
+mod fixtures {
+    //! The answers croner and Intl gave in 0.2.1, from
+    //! legacy/scripts/cron-fixtures.ts.
+    use super::*;
+    use serde_json::Value;
+
+    fn load(name: &str) -> Value {
+        let path = format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
+        serde_json::from_str(&std::fs::read_to_string(path).expect("fixture exists"))
+            .expect("fixture is JSON")
+    }
+
+    /// Phase 3 makes these exact; until then this reports how far apart the
+    /// two implementations are.
+    #[test]
+    #[ignore = "phase 3: cron and zones match croner and Intl exactly"]
+    fn next_fires_match_croner() {
+        // SAFETY: tests that read local time run in this one test.
+        unsafe { std::env::set_var("TZ", "Australia/Sydney") };
+        let fixture = load("cron.json");
+        let cases = fixture["cases"].as_array().expect("cases");
+        let mut wrong = Vec::new();
+        for case in cases {
+            let trigger = Trigger::Cron {
+                expression: case["expr"].as_str().unwrap_or_default().to_owned(),
+                timezone: case["tz"].as_str().map(str::to_owned),
+            };
+            let mut cursor = case["from_ms"].as_i64();
+            let mut got = Vec::new();
+            for _ in 0..3 {
+                cursor = cursor.and_then(|from| next_fire_at(&trigger, from));
+                got.push(cursor);
+                if cursor.is_none() {
+                    break;
+                }
+            }
+            let want: Vec<Option<i64>> = case["next_ms"]
+                .as_array()
+                .expect("next")
+                .iter()
+                .map(Value::as_i64)
+                .collect();
+            if got != want {
+                wrong.push(format!(
+                    "{} {:?} {} {:?} != {:?}",
+                    case["expr"], case["tz"], case["label"], got, want
+                ));
+            }
+        }
+        assert!(
+            wrong.is_empty(),
+            "{} of {} differ, e.g.\n{}",
+            wrong.len(),
+            cases.len(),
+            wrong[..wrong.len().min(15)].join("\n")
+        );
+    }
+
+    #[test]
+    #[ignore = "phase 3: cron and zones match croner and Intl exactly"]
+    fn zone_names_canonicalize_like_intl() {
+        let fixture = load("tz-names.json");
+        let cases = fixture["cases"].as_array().expect("cases");
+        let mut wrong = Vec::new();
+        for case in cases {
+            let input = case["input"].as_str().unwrap_or_default();
+            let got = require_timezone(input).ok();
+            let want = case["canonical"].as_str().map(str::to_owned);
+            if got != want {
+                wrong.push(format!("{input:?}: {got:?} != {want:?}"));
+            }
+        }
+        assert!(
+            wrong.is_empty(),
+            "{} of {} differ:\n{}",
+            wrong.len(),
+            cases.len(),
+            wrong[..wrong.len().min(30)].join("\n")
+        );
     }
 }
