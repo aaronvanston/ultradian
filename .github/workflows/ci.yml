@@ -45,10 +45,17 @@ jobs:
           - macos-latest
     steps:
       - uses: actions/checkout@v7
+      # 0.2.1 runs from legacy/ for the database compatibility checks.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+        working-directory: legacy
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
       - run: cargo build
       # The scenarios the rewrite answers so far; the rest join as their
       # phases land.
-      - run: BIN="$PWD/target/debug/ultradian" tests/contract/run.sh version parse-errors catalog
+      - run: BIN="$PWD/target/debug/ultradian" tests/contract/run.sh version parse-errors parse-forms catalog arbor catch-up-zero
+      - run: RS_BIN=target/debug/ultradian tests/compat/run.sh
