@@ -1,0 +1,25 @@
+{
+ "source": {"bun":"1.3.14","croner":"10.0.1","icu":"74.2","local_zone":"Australia/Sydney"},
+ "cases": [
+  {"code":"invalid_cron","expr":"","message":"Invalid cron expression \"\": CronPattern: invalid configuration format (''), exactly five, six, or seven space separated parts are required."},
+  {"code":"invalid_cron","expr":"   ","message":"Invalid cron expression \"   \": CronPattern: invalid configuration format ('   '), exactly five, six, or seven space separated parts are required."},
+  {"code":"invalid_cron","expr":"not a cron","message":"Invalid cron expression \"not a cron\": CronPattern: invalid configuration format ('not a cron'), exactly five, six, or seven space separated parts are required."},
+  {"code":"invalid_cron","expr":"* * * *","message":"Invalid cron expression \"* * * *\": CronPattern: invalid configuration format ('* * * *'), exactly five, six, or seven space separated parts are required."},
+  {"accepted":true,"expr":"1 2 3 4 5 6 7","trigger":{"expression":"1 2 3 4 5 6 7","kind":"cron","timezone":"UTC"}},
+  {"code":"invalid_cron","expr":"61 * * * *","message":"Invalid cron expression \"61 * * * *\": CronPattern: Invalid value for minute: 61"},
+  {"code":"invalid_cron","expr":"0 25 * * *","message":"Invalid cron expression \"0 25 * * *\": CronPattern: Invalid value for hour: 25"},
+  {"code":"invalid_cron","expr":"0 9 32 * *","message":"Invalid cron expression \"0 9 32 * *\": CronPattern: Invalid value for day: 31"},
+  {"code":"invalid_cron","expr":"0 9 0 * *","message":"Invalid cron expression \"0 9 0 * *\": CronPattern: Invalid value for day: -1"},
+  {"code":"invalid_cron","expr":"0 9 * 13 *","message":"Invalid cron expression \"0 9 * 13 *\": CronPattern: Invalid value for month: 12"},
+  {"code":"invalid_cron","expr":"0 9 * * 8","message":"Invalid cron expression \"0 9 * * 8\": CronPattern: Invalid value for dayOfWeek: 8"},
+  {"code":"invalid_cron","expr":"0 9 * * MON#6","message":"Invalid cron expression \"0 9 * * MON#6\": CronPattern: nth weekday out of range, should be 1-5 or L. Value: 6, Type: string"},
+  {"code":"invalid_cron","expr":"0 9 * * 1#0","message":"Invalid cron expression \"0 9 * * 1#0\": CronPattern: nth weekday out of range, should be 1-5 or L. Value: 0, Type: string"},
+  {"code":"invalid_cron","expr":"0 9 32W * *","message":"Invalid cron expression \"0 9 32W * *\": CronPattern: Invalid value for nearestWeekdays: 31"},
+  {"code":"invalid_cron","expr":"*/0 * * * *","message":"Invalid cron expression \"*/0 * * * *\": CronPattern: Syntax error, illegal stepping: 0"},
+  {"code":"invalid_cron","expr":"5-1 * * * *","message":"Invalid cron expression \"5-1 * * * *\": CronPattern: From value is larger than to value: '5-1'"},
+  {"code":"invalid_cron","expr":"0 9 * * FOO","message":"Invalid cron expression \"0 9 * * FOO\": CronPattern: configuration entry 5 (FOO) contains illegal characters."},
+  {"code":"invalid_cron","expr":"@sometimes","message":"Invalid cron expression \"@sometimes\": CronPattern: invalid configuration format ('@sometimes'), exactly five, six, or seven space separated parts are required."},
+  {"accepted":true,"expr":"0 9 ? * *","trigger":{"expression":"0 9 ? * *","kind":"cron","timezone":"UTC"}},
+  {"accepted":true,"expr":"0 9 * * ?","trigger":{"expression":"0 9 * * ?","kind":"cron","timezone":"UTC"}}
+ ]
+}
