@@ -2,24 +2,38 @@
 
 use super::*;
 
-/// A store in its own temporary home, removed when dropped.
-struct TempStore {
+/// A store in its own folder under the system temp directory, removed
+/// when dropped. Shared by every test that needs a store.
+pub(crate) struct TempStore {
     store: Option<Store>,
-    home: PathBuf,
+    pub(crate) home: PathBuf,
 }
 
 impl TempStore {
-    fn new() -> Self {
-        let home = temp_home();
-        let store = Store::open(&home).expect("opens");
-        Self {
-            store: Some(store),
-            home,
-        }
+    pub(crate) fn new() -> Self {
+        let mut temp = Self::empty();
+        temp.store = Some(Store::open(&temp.home).expect("opens"));
+        temp
     }
 
-    fn store(&self) -> &Store {
+    /// The folder alone, for tests that shape a database before opening it.
+    pub(crate) fn empty() -> Self {
+        let base = std::env::temp_dir().canonicalize().expect("temp dir");
+        let mut bytes = [0_u8; 8];
+        let _ = getrandom::fill(&mut bytes);
+        let name: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+        let home = base.join(format!("ultradian-store-{name}"));
+        std::fs::create_dir_all(&home).expect("temp home");
+        assert!(home.starts_with(&base));
+        Self { store: None, home }
+    }
+
+    pub(crate) fn store(&self) -> &Store {
         self.store.as_ref().expect("open")
+    }
+
+    pub(crate) fn raw(&self) -> Connection {
+        Connection::open(self.home.join("ultradian.db")).expect("raw open")
     }
 }
 
@@ -30,47 +44,35 @@ impl Drop for TempStore {
     }
 }
 
-/// A fresh folder under the system temp directory, never anywhere else.
-pub(crate) fn temp_home() -> PathBuf {
-    let base = std::env::temp_dir().canonicalize().expect("temp dir");
-    let mut bytes = [0_u8; 8];
-    let _ = getrandom::fill(&mut bytes);
-    let name: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
-    let home = base.join(format!("ultradian-store-{name}"));
-    std::fs::create_dir_all(&home).expect("temp home");
-    assert!(home.starts_with(&base));
-    home
+/// A manual schedule running `command` in /tmp, to adjust with `..`.
+pub(crate) fn new_schedule(name: &str, trigger: Trigger, command: &[&str]) -> NewSchedule {
+    NewSchedule {
+        name: name.into(),
+        group: None,
+        trigger,
+        gate: None,
+        gate_mode: "output".into(),
+        command: command.iter().map(|part| (*part).to_owned()).collect(),
+        working_directory: "/tmp".into(),
+        timeout_ms: None,
+        catch_up_ms: 0,
+    }
 }
 
-struct TempHome(PathBuf);
-
-impl Drop for TempHome {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
+pub(crate) fn begin(store: &Store, schedule: &Schedule, trigger: &str) -> Run {
+    store
+        .begin_run(schedule, trigger, false)
+        .expect("begins")
+        .expect("not busy")
 }
 
 fn add(store: &Store, name: &str, trigger: Trigger, catch_up_ms: i64) -> Schedule {
     store
         .add_schedule(NewSchedule {
-            name: name.into(),
-            group: None,
-            trigger,
-            gate: None,
-            gate_mode: "output".into(),
-            command: vec!["echo".into(), "ok".into()],
-            working_directory: "/tmp".into(),
-            timeout_ms: None,
             catch_up_ms,
+            ..new_schedule(name, trigger, &["echo", "ok"])
         })
         .expect("adds")
-}
-
-fn begin(store: &Store, schedule: &Schedule) -> Run {
-    store
-        .begin_run(schedule, "manual", false)
-        .expect("begins")
-        .expect("not busy")
 }
 
 fn raw(home: &Path) -> Connection {
@@ -122,11 +124,11 @@ fn a_fresh_database_lands_on_the_latest_version_and_reopens_cleanly() {
 
 #[test]
 fn refuses_a_database_written_by_a_newer_release() {
-    let home = TempHome(temp_home());
-    raw(&home.0)
+    let home = TempStore::empty();
+    raw(&home.home)
         .execute_batch(&format!("PRAGMA user_version = {}", SCHEMA_VERSION + 1))
         .expect("bump");
-    let Err(error) = Store::open(&home.0) else {
+    let Err(error) = Store::open(&home.home) else {
         panic!("opened a newer database")
     };
     assert_eq!(error.code, "database_too_new");
@@ -134,16 +136,16 @@ fn refuses_a_database_written_by_a_newer_release() {
     assert!(error.message.contains("newer than this release"));
     // Refusing changes nothing: the version stays where the newer build put it.
     assert_eq!(
-        user_version(&raw(&home.0)).expect("version"),
+        user_version(&raw(&home.home)).expect("version"),
         SCHEMA_VERSION + 1
     );
 }
 
 /// The shape 0.1.x wrote, before schemas were versioned; `extra` adds the
 /// columns later 0.1 builds grew.
-fn legacy_database(schedules_extra: &str, runs_extra: &str) -> TempHome {
-    let home = TempHome(temp_home());
-    let db = raw(&home.0);
+fn legacy_database(schedules_extra: &str, runs_extra: &str) -> TempStore {
+    let home = TempStore::empty();
+    let db = raw(&home.home);
     db.execute_batch(&format!(
         "CREATE TABLE schedules (
           id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE,
@@ -172,7 +174,7 @@ fn carries_a_0_1_database_over_with_its_schedules_and_run_history() {
         ", timeout_ms INTEGER, schedule_group TEXT, kind TEXT NOT NULL DEFAULT 'schedule'",
         ", working_directory TEXT, child_pid INTEGER",
     );
-    raw(&home.0)
+    raw(&home.home)
         .execute_batch(
             "INSERT INTO schedules (id, name, trigger_kind, trigger_value,
               gate, command, working_directory, status, timeout_ms, schedule_group,
@@ -191,7 +193,7 @@ fn carries_a_0_1_database_over_with_its_schedules_and_run_history() {
         )
         .expect("legacy rows");
 
-    let store = Store::open(&home.0).expect("upgrades");
+    let store = Store::open(&home.home).expect("upgrades");
     let schedule = store.get_schedule("tick").expect("reads").expect("kept");
     assert_eq!(schedule.command, ["echo", "ok"]);
     assert_eq!(schedule.gate.as_deref(), Some("true"));
@@ -224,7 +226,7 @@ fn carries_a_0_1_database_over_with_its_schedules_and_run_history() {
     assert_eq!((daemon.pid, daemon.version.as_str()), (4242, "0.1"));
     drop(store);
 
-    let reopened = raw(&home.0);
+    let reopened = raw(&home.home);
     assert_eq!(user_version(&reopened).expect("version"), SCHEMA_VERSION);
     let leftovers: i64 = reopened
         .query_row(
@@ -239,7 +241,7 @@ fn carries_a_0_1_database_over_with_its_schedules_and_run_history() {
 #[test]
 fn carries_over_the_earliest_0_1_shape_filling_what_it_lacked() {
     let home = legacy_database("", "");
-    raw(&home.0)
+    raw(&home.home)
         .execute_batch(
             "INSERT INTO schedules (id, name, trigger_kind, trigger_value,
               gate, command, working_directory, created_at, next_fire_at) VALUES
@@ -249,7 +251,7 @@ fn carries_over_the_earliest_0_1_shape_filling_what_it_lacked() {
               ('r1', 's1', 'tick', 'box', 'scheduled', 'clean', 1500, 42);",
         )
         .expect("legacy rows");
-    let store = Store::open(&home.0).expect("upgrades");
+    let store = Store::open(&home.home).expect("upgrades");
     let schedule = store.get_schedule("tick").expect("reads").expect("kept");
     assert_eq!(schedule.group, None);
     assert_eq!(schedule.status, "active");
@@ -263,12 +265,10 @@ fn carries_over_the_earliest_0_1_shape_filling_what_it_lacked() {
     // run takes two revisions; 0.2.1 numbers them the same way.
     assert_eq!(run.revision, 2);
     assert_eq!(store.read_daemon().expect("reads"), None);
-}
 
-#[test]
-fn a_0_1_database_with_no_runs_or_daemon_table_still_upgrades() {
-    let home = TempHome(temp_home());
-    raw(&home.0)
+    // The very first builds had no runs or daemon table at all.
+    let home = TempStore::empty();
+    raw(&home.home)
         .execute_batch(
             "CREATE TABLE schedules (
               id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE,
@@ -281,7 +281,7 @@ fn a_0_1_database_with_no_runs_or_daemon_table_still_upgrades() {
               ('s1', 'hand', 'manual', NULL, '[\"true\"]', '/srv', 10);",
         )
         .expect("legacy rows");
-    let store = Store::open(&home.0).expect("upgrades");
+    let store = Store::open(&home.home).expect("upgrades");
     assert_eq!(store.list_schedules().expect("lists").len(), 1);
     assert_eq!(store.count_runs(None).expect("counts"), 0);
 }
@@ -323,26 +323,6 @@ fn paused_schedules_never_fire_and_resume_reschedules() {
         .set_schedule_status("tick", "active")
         .expect("resumes");
     assert!(resumed.next_fire_at.is_some());
-}
-
-#[test]
-fn recovery_marks_dead_owner_runs_interrupted() {
-    let temp = TempStore::new();
-    let store = temp.store();
-    let schedule = add(store, "tick", Trigger::Every { seconds: 1 }, 0);
-    // A run owned by a process that no longer exists, written the way a
-    // crashed daemon would have left it.
-    orphan_run(&temp.home, "run_orphan", &schedule, "scheduled");
-    let (recovered, _) = store.recover().expect("recovers");
-    assert_eq!(recovered.interrupted, 1);
-    assert_eq!(
-        store
-            .get_run("run_orphan")
-            .expect("reads")
-            .expect("kept")
-            .status,
-        "interrupted"
-    );
 }
 
 #[test]
@@ -394,6 +374,38 @@ fn a_late_fire_runs_once_inside_its_catch_up_window_and_is_missed_beyond_it() {
         on_time.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
         ["forgiving", "strict"]
     );
+
+    // At the boundary: late by exactly its window (or the 30 s floor) still
+    // runs.
+    {
+        let temp = TempStore::new();
+        let store = temp.store();
+        // 0.2.1 misses a fire only when it is later than max(catch-up, 30 s).
+        add(store, "strict", Trigger::Every { seconds: 3600 }, 0);
+        add(store, "wide", Trigger::Every { seconds: 3600 }, 120_000);
+        let names = |schedules: &[Schedule]| {
+            let mut names: Vec<String> = schedules.iter().map(|s| s.name.clone()).collect();
+            names.sort();
+            names
+        };
+        let first = store
+            .get_schedule("strict")
+            .expect("reads")
+            .expect("kept")
+            .next_fire_at
+            .expect("next");
+        let (due, missed) = store.claim_due(first + ON_TIME_MS).expect("claims");
+        assert_eq!(
+            (names(&due), names(&missed)),
+            (vec!["strict".to_owned(), "wide".to_owned()], vec![])
+        );
+        let second = first + ON_TIME_MS + 3_600_000;
+        let (due, missed) = store.claim_due(second + 120_000).expect("claims");
+        assert_eq!(
+            (names(&due), names(&missed)),
+            (vec!["wide".to_owned()], vec!["strict".to_owned()])
+        );
+    }
 }
 
 #[test]
@@ -450,8 +462,8 @@ fn a_schedule_never_has_two_runs_in_flight_queued_or_running() {
 fn the_runs_cursor_sees_every_change_in_commit_order_late_finishers_included() {
     let temp = TempStore::new();
     let store = temp.store();
-    let slow = begin(store, &add(store, "slow", Trigger::Manual, 0));
-    let quick = begin(store, &add(store, "quick", Trigger::Manual, 0));
+    let slow = begin(store, &add(store, "slow", Trigger::Manual, 0), "manual");
+    let quick = begin(store, &add(store, "quick", Trigger::Manual, 0), "manual");
     store
         .finish_run(&quick.id, "succeeded", None, Some(0))
         .expect("finishes");
@@ -509,9 +521,13 @@ fn a_one_shot_job_is_claimed_once_and_never_lists_as_a_schedule() {
 }
 
 #[test]
-fn recovery_interrupts_a_one_shot_run_and_sweeps_only_spent_jobs() {
+fn recovery_interrupts_dead_owners_runs_and_sweeps_only_spent_jobs() {
     let temp = TempStore::new();
     let store = temp.store();
+    // A scheduled run owned by a process that no longer exists, written the
+    // way a crashed daemon would have left it.
+    let tick = add(store, "tick", Trigger::Every { seconds: 3600 }, 0);
+    orphan_run(&temp.home, "run_orphan", &tick, "scheduled");
     let spent = store
         .add_once(
             "once-spent-abcdef".into(),
@@ -532,15 +548,11 @@ fn recovery_interrupts_a_one_shot_run_and_sweeps_only_spent_jobs() {
         .expect("adds");
     orphan_run(&temp.home, "run_once", &spent, "once");
     let (recovered, _) = store.recover().expect("recovers");
-    assert_eq!((recovered.interrupted, recovered.swept), (1, 1));
-    assert_eq!(
-        store
-            .get_run("run_once")
-            .expect("reads")
-            .expect("kept")
-            .status,
-        "interrupted"
-    );
+    assert_eq!((recovered.interrupted, recovered.swept), (2, 1));
+    for id in ["run_orphan", "run_once"] {
+        let run = store.get_run(id).expect("reads").expect("kept");
+        assert_eq!(run.status, "interrupted", "{id}");
+    }
     // The unclaimed job survives, still due, so the daemon runs it now.
     let (pending, _) = store.claim_due(now_ms()).expect("claims");
     assert_eq!(
@@ -553,7 +565,7 @@ fn recovery_interrupts_a_one_shot_run_and_sweeps_only_spent_jobs() {
 fn a_run_owned_by_a_live_process_survives_recovery() {
     let temp = TempStore::new();
     let store = temp.store();
-    begin(store, &add(store, "tick", Trigger::Manual, 0));
+    begin(store, &add(store, "tick", Trigger::Manual, 0), "manual");
     let (recovered, _) = store.recover().expect("recovers");
     assert_eq!(recovered.interrupted, 0);
     assert_eq!(store.active_runs().expect("lists").len(), 1);
@@ -631,46 +643,19 @@ fn prune_deletes_old_finished_runs_and_their_logs() {
     let temp = TempStore::new();
     let store = temp.store();
     let schedule = add(store, "tick", Trigger::Manual, 0);
-    let old = begin(store, &schedule);
+    let old = begin(store, &schedule, "manual");
     let pointer = PathBuf::from(old.log_pointer.clone().expect("has a log"));
     std::fs::create_dir_all(pointer.parent().expect("day folder")).expect("log folder");
     std::fs::write(&pointer, "12345").expect("log");
     store
         .finish_run(&old.id, "succeeded", None, Some(0))
         .expect("finishes");
-    let running = begin(store, &add(store, "other", Trigger::Manual, 0));
+    let running = begin(store, &add(store, "other", Trigger::Manual, 0), "manual");
     let (removed, freed) = store.prune_history(now_ms() + 1, None).expect("prunes");
     assert_eq!((removed, freed), (1, 5));
     assert!(!pointer.exists());
     assert!(!temp.home.join("logs").join("tick").exists());
     assert!(store.get_run(&running.id).expect("reads").is_some());
-}
-
-#[test]
-fn the_daemon_lock_has_one_live_holder() {
-    let temp = TempStore::new();
-    let store = temp.store();
-    assert_eq!(
-        store
-            .claim_daemon(100, "0.3.0", 1, |_| true)
-            .expect("claims"),
-        None
-    );
-    let holder = store
-        .claim_daemon(200, "0.3.0", 2, |_| true)
-        .expect("claims")
-        .expect("held");
-    assert_eq!(holder.pid, 100);
-    assert!(store.heartbeat(100).expect("beats"));
-    assert_eq!(
-        store
-            .claim_daemon(200, "0.3.0", 2, |_| false)
-            .expect("claims"),
-        None
-    );
-    assert!(!store.heartbeat(100).expect("beats"));
-    store.clear_daemon(200).expect("clears");
-    assert_eq!(store.read_daemon().expect("reads"), None);
 }
 
 #[test]
@@ -695,39 +680,259 @@ fn resolves_paths_like_node() {
 }
 
 #[test]
-fn a_fire_late_by_exactly_its_window_still_runs() {
-    let temp = TempStore::new();
-    let store = temp.store();
-    // 0.2.1 misses a fire only when it is later than max(catch-up, 30 s).
-    add(store, "strict", Trigger::Every { seconds: 3600 }, 0);
-    add(store, "wide", Trigger::Every { seconds: 3600 }, 120_000);
-    let names = |schedules: &[Schedule]| {
-        let mut names: Vec<String> = schedules.iter().map(|s| s.name.clone()).collect();
-        names.sort();
-        names
-    };
-    let first = store
-        .get_schedule("strict")
-        .expect("reads")
-        .expect("kept")
-        .next_fire_at
-        .expect("next");
-    let (due, missed) = store.claim_due(first + ON_TIME_MS).expect("claims");
-    assert_eq!(
-        (names(&due), names(&missed)),
-        (vec!["strict".to_owned(), "wide".to_owned()], vec![])
-    );
-    let second = first + ON_TIME_MS + 3_600_000;
-    let (due, missed) = store.claim_due(second + 120_000).expect("claims");
-    assert_eq!(
-        (names(&due), names(&missed)),
-        (vec!["wide".to_owned()], vec!["strict".to_owned()])
-    );
-}
-
-#[test]
 fn group_ids_are_never_mistaken_for_live_processes() {
     assert!(is_pid_alive(i64::from(std::process::id())));
     assert!(!is_pid_alive(0));
     assert!(!is_pid_alive(-1));
+}
+
+/// sqlite_master of a fresh database, as 0.2.1 created it: (type, name,
+/// table, sql). The SQL text is kept byte for byte, indentation included.
+const FRESH_SCHEMA: [(&str, &str, &str, Option<&str>); 12] = [
+    (
+        "table",
+        "counters",
+        "counters",
+        Some("CREATE TABLE counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL)"),
+    ),
+    (
+        "table",
+        "daemon",
+        "daemon",
+        Some(
+            r"CREATE TABLE daemon (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        pid INTEGER NOT NULL,
+        version TEXT NOT NULL,
+        started_at INTEGER NOT NULL,
+        heartbeat_at INTEGER NOT NULL
+      )",
+        ),
+    ),
+    (
+        "table",
+        "runs",
+        "runs",
+        Some(
+            r"CREATE TABLE runs (
+        id TEXT PRIMARY KEY,
+        schedule_id TEXT NOT NULL,
+        schedule_name TEXT NOT NULL,
+        machine_id TEXT NOT NULL,
+        working_directory TEXT,
+        executor TEXT,
+        trigger TEXT NOT NULL,
+        status TEXT NOT NULL,
+        gate_exit INTEGER,
+        action_exit INTEGER,
+        started_at INTEGER NOT NULL,
+        finished_at INTEGER,
+        log_pointer TEXT,
+        owner_pid INTEGER NOT NULL,
+        pgid INTEGER,
+        revision INTEGER NOT NULL DEFAULT 0
+      )",
+        ),
+    ),
+    (
+        "index",
+        "runs_by_revision",
+        "runs",
+        Some("CREATE INDEX runs_by_revision ON runs (revision)"),
+    ),
+    (
+        "index",
+        "runs_by_schedule",
+        "runs",
+        Some("CREATE INDEX runs_by_schedule ON runs (schedule_name, started_at DESC)"),
+    ),
+    (
+        "trigger",
+        "runs_revision_insert",
+        "runs",
+        Some(
+            r"CREATE TRIGGER runs_revision_insert
+        AFTER INSERT ON runs
+        BEGIN
+          UPDATE counters SET value = value + 1 WHERE name = 'runs';
+          UPDATE runs SET revision = (SELECT value FROM counters WHERE name = 'runs')
+          WHERE rowid = NEW.rowid;
+        END",
+        ),
+    ),
+    (
+        "trigger",
+        "runs_revision_update",
+        "runs",
+        Some(
+            r"CREATE TRIGGER runs_revision_update
+        AFTER UPDATE ON runs
+        BEGIN
+          UPDATE counters SET value = value + 1 WHERE name = 'runs';
+          UPDATE runs SET revision = (SELECT value FROM counters WHERE name = 'runs')
+          WHERE rowid = NEW.rowid;
+        END",
+        ),
+    ),
+    (
+        "table",
+        "schedules",
+        "schedules",
+        Some(
+            r"CREATE TABLE schedules (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        kind TEXT NOT NULL DEFAULT 'schedule',
+        schedule_group TEXT,
+        trigger_kind TEXT NOT NULL,
+        trigger_value TEXT,
+        timezone TEXT,
+        gate TEXT,
+        gate_mode TEXT NOT NULL DEFAULT 'output',
+        command TEXT NOT NULL,
+        working_directory TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        timeout_ms INTEGER,
+        catch_up_ms INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        next_fire_at INTEGER
+      )",
+        ),
+    ),
+    ("index", "sqlite_autoindex_counters_1", "counters", None),
+    ("index", "sqlite_autoindex_runs_1", "runs", None),
+    ("index", "sqlite_autoindex_schedules_1", "schedules", None),
+    ("index", "sqlite_autoindex_schedules_2", "schedules", None),
+];
+
+#[test]
+fn a_fresh_database_has_the_schema_0_2_1_created() {
+    let temp = TempStore::new();
+    let db = temp.raw();
+    let mut query = db
+        .prepare("SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY name")
+        .expect("query");
+    let rows: Vec<(String, String, String, Option<String>)> = query
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })
+        .expect("reads")
+        .collect::<std::result::Result<_, _>>()
+        .expect("rows");
+    let want: Vec<(String, String, String, Option<String>)> = FRESH_SCHEMA
+        .iter()
+        .map(|(kind, name, table, sql)| {
+            (
+                (*kind).into(),
+                (*name).into(),
+                (*table).into(),
+                sql.map(str::to_owned),
+            )
+        })
+        .collect();
+    assert_eq!(rows, want);
+    let counter: (String, i64) = db
+        .query_row("SELECT name, value FROM counters", [], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
+        .expect("one counter");
+    assert_eq!(counter, ("runs".to_owned(), 0));
+}
+
+/// Rows 0.2.1 wrote for a cron schedule with a gate, an interval with an
+/// awkward command, a paused manual one, a one-shot job, a canceled run and
+/// a queued one.
+const ROWS_0_2_1: &str = r#"
+INSERT INTO schedules VALUES('schedule_0muwagwb6ibl669rdzg','tick','schedule','batch','cron','0 9 * * 1-5','Australia/Sydney','sh "gate.sh"','exit','["/bin/sh","run.sh"]','/home/casey/work/automation','active',21600000,1800000,1791267582354,1791267582354,1791324000000);
+INSERT INTO schedules VALUES('schedule_0muwagwd9qn2908po22','hourly','schedule','batch','every','3600',NULL,NULL,'output','["echo","quote \" and ü"]','/home/casey/work','active',NULL,0,1791267582429,1791267582429,1791271182429);
+INSERT INTO schedules VALUES('schedule_0muwagwf14c1q9gki7w','hand','schedule',NULL,'manual',NULL,NULL,NULL,'output','["true"]','/home/casey/work','paused',NULL,0,1791267582493,1791267582557,NULL);
+INSERT INTO schedules VALUES('job_0muwagwocru1dc14c6q','once-import-ak3kjp','once',NULL,'manual',NULL,NULL,NULL,'output','["./import.sh"]','/home/casey/work','active',NULL,0,1791267582828,1791267582828,1791267582828);
+INSERT INTO runs VALUES('run_0muwagwin000yo2gzxl','schedule_0muwagwb6ibl669rdzg','tick','casey-mbp','/home/casey/work/automation',NULL,'manual','canceled',NULL,NULL,1791267582623,1791267582762,'/home/casey/state/logs/tick/2026-10-06/run_0muwagwin000yo2gzxl.log',15849,NULL,5);
+INSERT INTO runs VALUES('run_0muwagwki0iie4he5ki','schedule_0muwagwd9qn2908po22','hourly','casey-mbp','/home/casey/work',NULL,'manual','queued',NULL,NULL,1791267582690,NULL,'/home/casey/state/logs/hourly/2026-10-06/run_0muwagwki0iie4he5ki.log',15851,NULL,4);
+INSERT INTO counters VALUES('runs',5);
+"#;
+
+#[test]
+fn reads_rows_exactly_as_0_2_1_wrote_them() {
+    let temp = TempStore::empty();
+    let db = temp.raw();
+    let sql = |kind: &'static str| {
+        FRESH_SCHEMA
+            .iter()
+            .filter(move |row| row.0 == kind)
+            .filter_map(|row| row.3)
+    };
+    for statement in sql("table") {
+        db.execute_batch(statement).expect("table");
+    }
+    // Rows go in before the triggers, which would renumber revisions.
+    db.execute_batch(ROWS_0_2_1).expect("rows");
+    for statement in sql("index").chain(sql("trigger")) {
+        db.execute_batch(statement).expect("index or trigger");
+    }
+    db.execute_batch("PRAGMA journal_mode = WAL; PRAGMA user_version = 1;")
+        .expect("version");
+    drop(db);
+
+    let store = Store::open(&temp.home).expect("opens");
+    let names: Vec<String> = store
+        .list_schedules()
+        .expect("lists")
+        .into_iter()
+        .map(|schedule| schedule.name)
+        .collect();
+    assert_eq!(names, ["hand", "hourly", "tick"]);
+    let tick = store.get_schedule("tick").expect("reads").expect("kept");
+    assert_eq!(
+        tick.trigger,
+        Trigger::Cron {
+            expression: "0 9 * * 1-5".into(),
+            timezone: Some("Australia/Sydney".into())
+        }
+    );
+    assert_eq!(tick.gate.as_deref(), Some("sh \"gate.sh\""));
+    assert_eq!(
+        (tick.gate_mode.as_str(), tick.group.as_deref()),
+        ("exit", Some("batch"))
+    );
+    assert_eq!(
+        (tick.timeout_ms, tick.catch_up_ms, tick.next_fire_at),
+        (Some(21_600_000), 1_800_000, Some(1_791_324_000_000))
+    );
+    assert_eq!(tick.command, ["/bin/sh", "run.sh"]);
+    assert_eq!(tick.working_directory, "/home/casey/work/automation");
+    let hourly = store.get_schedule("hourly").expect("reads").expect("kept");
+    assert_eq!(hourly.trigger, Trigger::Every { seconds: 3600 });
+    assert_eq!(hourly.command, ["echo", "quote \" and ü"]);
+    let hand = store.get_schedule("hand").expect("reads").expect("kept");
+    assert_eq!(
+        (hand.status.as_str(), &hand.trigger),
+        ("paused", &Trigger::Manual)
+    );
+
+    let runs = store.export_runs(0, None).expect("runs");
+    let seen: Vec<(&str, &str, i64)> = runs
+        .iter()
+        .map(|run| {
+            (
+                run.schedule_name.as_str(),
+                run.status.as_str(),
+                run.revision,
+            )
+        })
+        .collect();
+    assert_eq!(seen, [("hourly", "queued", 4), ("tick", "canceled", 5)]);
+    assert_eq!(runs[1].finished_at, Some(1_791_267_582_762));
+    assert_eq!(
+        runs[1].log_pointer.as_deref(),
+        Some("/home/casey/state/logs/tick/2026-10-06/run_0muwagwin000yo2gzxl.log")
+    );
+    // The queued run and the one-shot job are still there for a daemon.
+    assert_eq!(store.claim_queued(4242).expect("claims").len(), 1);
+    let (due, _) = store.claim_due(1_791_267_600_000).expect("claims");
+    assert_eq!(
+        due.iter().map(|job| job.kind.as_str()).collect::<Vec<_>>(),
+        ["once"]
+    );
 }

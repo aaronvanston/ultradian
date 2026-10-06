@@ -20,6 +20,11 @@ use crate::store::{Run, Schedule, Store, is_pid_alive};
 
 const DAEMON_LOG_ROTATE_BYTES: usize = 5_000_000;
 const DAEMON_LOG_KEEP: u32 = 3;
+const TICK: Duration = Duration::from_secs(1);
+const STALL_SWEEP_MS: i64 = 30_000;
+/// How long a stalled run must stay that way before it is reaped.
+const STALL_CONFIRM_MS: i64 = 60_000;
+const RETENTION_SWEEP_MS: i64 = 86_400_000;
 
 /// A line logger shared by the loop and its fires.
 pub type Log = Arc<dyn Fn(&str) + Send + Sync>;
@@ -74,14 +79,13 @@ pub fn open_daemon_log(home: &Path, mirror: bool) -> Log {
 /// Reaps active runs whose process evidence says they can never finish:
 /// the owning process is gone (a killed manual run), or the child the run
 /// waits on is gone while its owner survives. A run is reaped only after a
-/// second sweep confirms it stayed that way past `confirm_ms`, so a run
+/// second sweep confirms it stayed that way past STALL_CONFIRM_MS, so a run
 /// finishing normally is never raced. Runs with no recorded child stay
 /// untouched unless their owner dies.
 pub fn sweep_stalled_runs(
     store: &Store,
     suspects: &mut HashMap<String, i64>,
     now: i64,
-    confirm_ms: i64,
     daemon_pid: i64,
     log: &Log,
 ) -> Result<usize, AppError> {
@@ -99,7 +103,7 @@ pub fn sweep_stalled_runs(
             suspects.insert(run.id.clone(), now);
             continue;
         };
-        if now - first_seen < confirm_ms {
+        if now - first_seen < STALL_CONFIRM_MS {
             continue;
         }
         store.finish_run(&run.id, "interrupted", run.gate_exit, run.action_exit)?;
@@ -115,33 +119,12 @@ pub fn sweep_stalled_runs(
     Ok(reaped)
 }
 
-/// The loop's timing; tests shorten it.
-#[derive(Debug, Clone, Copy)]
-pub struct Timing {
-    pub tick: Duration,
-    pub stall_sweep_ms: i64,
-    pub stall_confirm_ms: i64,
-    pub retention_sweep_ms: i64,
-}
-
-impl Default for Timing {
-    fn default() -> Self {
-        Self {
-            tick: Duration::from_secs(1),
-            stall_sweep_ms: 30_000,
-            stall_confirm_ms: 60_000,
-            retention_sweep_ms: 86_400_000,
-        }
-    }
-}
-
 pub struct LoopOptions<'a> {
     pub store: &'a Store,
     pub stop: &'a AtomicBool,
     pub version: &'a str,
     pub retention_ms: Option<i64>,
     pub log: Log,
-    pub timing: Timing,
 }
 
 /// A fire running on its own thread with its own connection to the store.
@@ -195,7 +178,6 @@ pub fn run_daemon_loop(options: LoopOptions) -> Result<(), AppError> {
         version,
         retention_ms,
         log,
-        timing,
     } = options;
     let pid = i64::from(std::process::id());
     let started_at = now_ms();
@@ -234,19 +216,12 @@ pub fn run_daemon_loop(options: LoopOptions) -> Result<(), AppError> {
             log("another daemon took over the lock; stopping");
             return Ok(false);
         }
-        if now_ms() - last_sweep_at >= timing.stall_sweep_ms {
+        if now_ms() - last_sweep_at >= STALL_SWEEP_MS {
             last_sweep_at = now_ms();
-            sweep_stalled_runs(
-                store,
-                &mut suspects,
-                last_sweep_at,
-                timing.stall_confirm_ms,
-                pid,
-                &log,
-            )?;
+            sweep_stalled_runs(store, &mut suspects, last_sweep_at, pid, &log)?;
         }
         if let Some(retention) = retention_ms
-            && now_ms() - last_prune_at >= timing.retention_sweep_ms
+            && now_ms() - last_prune_at >= RETENTION_SWEEP_MS
         {
             last_prune_at = now_ms();
             let (removed, freed) = store.prune_history(last_prune_at - retention, None)?;
@@ -307,9 +282,9 @@ pub fn run_daemon_loop(options: LoopOptions) -> Result<(), AppError> {
             Err(error) => log(&format!("tick failed: {}", error.message)),
         }
         inflight.retain(|fire| !fire.is_finished());
-        let wake = Instant::now() + timing.tick;
+        let wake = Instant::now() + TICK;
         while Instant::now() < wake && !stop.load(Ordering::SeqCst) {
-            thread::sleep(Duration::from_millis(20).min(timing.tick));
+            thread::sleep(Duration::from_millis(20));
         }
     }
 

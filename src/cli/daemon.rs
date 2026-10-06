@@ -6,7 +6,7 @@ use serde_json::Value;
 use super::schedules::open_store;
 use super::{Context, Done, NAME, VERSION, options};
 use crate::daemon::control;
-use crate::daemon::run_loop::{LoopOptions, Timing, open_daemon_log, run_daemon_loop};
+use crate::daemon::run_loop::{LoopOptions, open_daemon_log, run_daemon_loop};
 use crate::errors::AppError;
 use crate::output::iso_ms;
 use crate::store::{DaemonInfo, resolve_home};
@@ -88,7 +88,6 @@ pub fn run(context: &Context) -> Result<Done, AppError> {
         version: VERSION,
         retention_ms,
         log,
-        timing: Timing::default(),
     })?;
     #[derive(Serialize)]
     struct Stopped {

@@ -430,7 +430,7 @@ mod tests {
     use std::process::Child;
 
     use super::*;
-    use crate::store::tests::temp_home;
+    use crate::store::tests::TempStore;
 
     /// A stand-in daemon this test spawns: it ignores SIGTERM and exits by
     /// itself after `seconds`, like a 0.2.1 daemon on its leftover timer.
@@ -449,14 +449,14 @@ mod tests {
 
     #[test]
     fn a_daemon_that_released_its_lock_gets_longer_to_exit() {
-        let home = temp_home();
-        let store = Store::open(&home).expect("opens");
+        let temp = TempStore::new();
+        let store = temp.store();
         let mut child = lingering("1");
         let pid = i64::from(child.id());
         store.clear_daemon(pid).expect("released");
         let reaper = thread::spawn(move || child.wait());
         let exited = wait_for_exit(
-            &store,
+            store,
             pid,
             Duration::from_millis(300),
             Duration::from_secs(5),
@@ -464,18 +464,17 @@ mod tests {
         .expect("waits");
         let _ = reaper.join();
         assert!(exited);
-        let _ = std::fs::remove_dir_all(home);
     }
 
     #[test]
     fn a_daemon_still_holding_its_lock_gets_the_usual_grace() {
-        let home = temp_home();
-        let store = Store::open(&home).expect("opens");
+        let temp = TempStore::new();
+        let store = temp.store();
         let mut child = lingering("2");
         let pid = i64::from(child.id());
-        hold_lock(&store, pid);
+        hold_lock(store, pid);
         let exited = wait_for_exit(
-            &store,
+            store,
             pid,
             Duration::from_millis(300),
             Duration::from_secs(5),
@@ -484,6 +483,5 @@ mod tests {
         assert!(!exited);
         let _ = child.kill();
         let _ = child.wait();
-        let _ = std::fs::remove_dir_all(home);
     }
 }

@@ -229,34 +229,83 @@ mod tests {
         }
     }
 
+    /// The exact plist 0.2.1 rendered for this spec: reinstalling must
+    /// leave an existing service file byte for byte unchanged.
     #[test]
-    fn a_plist_escapes_every_value_it_embeds() {
+    fn a_plist_is_rendered_exactly_with_every_value_escaped() {
         let plist = render_launchd_plist(&spec(&["/tmp/<odd> \"name\"/udian", "daemon", "run"]));
-        assert!(plist.contains("<string>/tmp/&lt;odd&gt; &quot;name&quot;/udian</string>"));
-        assert!(plist.contains("<string>/opt/tools &amp; more/bin:/usr/bin</string>"));
-        assert!(plist.contains("<key>PATH</key>"));
-        assert!(!plist.contains("& more"));
-        assert!(plist.contains("<string>/Users/casey/state 100%/daemon.out.log</string>"));
+        assert_eq!(
+            plist,
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.ultradian.daemon</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/tmp/&lt;odd&gt; &quot;name&quot;/udian</string>
+    <string>daemon</string>
+    <string>run</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ExitTimeOut</key>
+  <integer>30</integer>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/tools &amp; more/bin:/usr/bin</string>
+    <key>ULTRADIAN_HOME</key>
+    <string>/Users/casey/state 100%</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/casey/state 100%/daemon.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/casey/state 100%/daemon.out.log</string>
+</dict>
+</plist>
+"#
+        );
     }
 
+    /// The exact unit 0.2.1 rendered for this spec, with systemd's
+    /// specifiers, variables and quotes escaped.
     #[test]
-    fn a_unit_quotes_arguments_and_escapes_systemd_s_specifiers_and_variables() {
+    fn a_unit_is_rendered_exactly_with_specifiers_and_variables_escaped() {
         let unit = render_systemd_unit(&spec(&["/srv/a dir/udi$an \"x\"", "daemon", "run"]));
-        assert!(unit.contains("ExecStart=\"/srv/a dir/udi$$an \\\"x\\\"\" \"daemon\" \"run\""));
-        assert!(unit.contains("Environment=\"ULTRADIAN_HOME=/Users/casey/state 100%%\""));
-        assert!(unit.contains("Environment=\"PATH=/opt/tools & more/bin:/usr/bin\""));
+        assert_eq!(
+            unit,
+            r#"[Unit]
+Description=Ultradian scheduling daemon
+
+[Service]
+ExecStart="/srv/a dir/udi$$an \"x\"" "daemon" "run"
+Environment="PATH=/opt/tools & more/bin:/usr/bin"
+Environment="ULTRADIAN_HOME=/Users/casey/state 100%%"
+Restart=on-failure
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target
+"#
+        );
     }
 
     #[test]
     fn keeps_each_existing_folder_once_in_order() {
-        let home = crate::store::tests::temp_home();
-        let home_text = home.to_string_lossy().into_owned();
+        let temp = crate::store::tests::TempStore::empty();
+        let home_text = temp.home.to_string_lossy().into_owned();
         assert_eq!(
             tidy_path(&format!(
                 "/usr/bin::{home_text}/gone:/bin:/usr/bin:{home_text}"
             )),
             format!("/usr/bin:/bin:{home_text}")
         );
-        let _ = std::fs::remove_dir_all(home);
     }
 }

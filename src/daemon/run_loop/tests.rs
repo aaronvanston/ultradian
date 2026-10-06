@@ -1,5 +1,6 @@
-//! Ported from 0.2.1's daemon.test.ts (the service-file and PATH tests
-//! live beside the renderers), with the loop's timing shortened.
+//! The daemon loop: stalled-run sweeps, the lock, recovery, shutdown,
+//! retention and its own log. The service-file and PATH tests live beside
+//! the renderers.
 
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
@@ -7,62 +8,13 @@ use std::process::Command;
 
 use super::*;
 use crate::runner::group_is_alive;
-use crate::store::NewSchedule;
-use crate::store::tests::temp_home;
+use crate::store::tests::{TempStore, begin, new_schedule};
 use crate::triggers::Trigger;
 
-struct Home {
-    path: PathBuf,
-    store: Option<Store>,
-}
-
-impl Home {
-    fn new() -> Self {
-        let path = temp_home();
-        let store = Store::open(&path).expect("opens");
-        Self {
-            path,
-            store: Some(store),
-        }
-    }
-
-    fn store(&self) -> &Store {
-        self.store.as_ref().expect("open")
-    }
-
-    fn add(&self, name: &str, command: &[&str], trigger: Trigger) -> Schedule {
-        self.store()
-            .add_schedule(NewSchedule {
-                name: name.into(),
-                group: None,
-                trigger,
-                gate: None,
-                gate_mode: "output".into(),
-                command: command.iter().map(|part| (*part).to_owned()).collect(),
-                working_directory: "/tmp".into(),
-                timeout_ms: None,
-                catch_up_ms: 0,
-            })
-            .expect("adds")
-    }
-
-    fn begin(&self, schedule: &Schedule, trigger: &str) -> Run {
-        self.store()
-            .begin_run(schedule, trigger, false)
-            .expect("begins")
-            .expect("not busy")
-    }
-
-    fn raw(&self) -> rusqlite::Connection {
-        rusqlite::Connection::open(self.path.join("ultradian.db")).expect("raw")
-    }
-}
-
-impl Drop for Home {
-    fn drop(&mut self) {
-        self.store.take();
-        let _ = std::fs::remove_dir_all(&self.path);
-    }
+fn add(temp: &TempStore, name: &str, command: &[&str], trigger: Trigger) -> Schedule {
+    temp.store()
+        .add_schedule(new_schedule(name, trigger, command))
+        .expect("adds")
 }
 
 fn quiet() -> Log {
@@ -80,15 +32,20 @@ fn me() -> i64 {
     i64::from(std::process::id())
 }
 
-fn sweep(home: &Home, suspects: &mut HashMap<String, i64>, now: i64) -> usize {
-    sweep_stalled_runs(home.store(), suspects, now, 60_000, me(), &quiet()).expect("sweeps")
+fn sweep(home: &TempStore, suspects: &mut HashMap<String, i64>, now: i64) -> usize {
+    sweep_stalled_runs(home.store(), suspects, now, me(), &quiet()).expect("sweeps")
 }
 
 #[test]
 fn reaps_a_run_whose_child_died_but_only_after_a_confirming_sweep() {
-    let home = Home::new();
-    let schedule = home.add("tick", &["echo", "ok"], Trigger::Every { seconds: 1 });
-    let run = home.begin(&schedule, "scheduled");
+    let home = TempStore::new();
+    let schedule = add(
+        &home,
+        "tick",
+        &["echo", "ok"],
+        Trigger::Every { seconds: 1 },
+    );
+    let run = begin(home.store(), &schedule, "scheduled");
     home.store()
         .set_run_process_group(&run.id, dead_pid())
         .expect("sets");
@@ -111,55 +68,55 @@ fn reaps_a_run_whose_child_died_but_only_after_a_confirming_sweep() {
     assert!(!home.store().has_active_run(&schedule.id).expect("checks"));
 }
 
+/// Neither a run whose child is alive nor one with no recorded child, both
+/// owned by the live daemon, is ever suspected.
 #[test]
-fn a_live_child_is_never_suspected() {
-    let home = Home::new();
-    let schedule = home.add("tick", &["echo", "ok"], Trigger::Every { seconds: 1 });
-    let run = home.begin(&schedule, "scheduled");
+fn a_live_child_or_no_recorded_child_is_never_suspected() {
+    let home = TempStore::new();
+    let schedule = add(
+        &home,
+        "tick",
+        &["echo", "ok"],
+        Trigger::Every { seconds: 1 },
+    );
+    let run = begin(home.store(), &schedule, "scheduled");
     home.store()
         .set_run_process_group(&run.id, me())
         .expect("sets");
+    let other = add(
+        &home,
+        "tock",
+        &["echo", "ok"],
+        Trigger::Every { seconds: 1 },
+    );
+    let childless = begin(home.store(), &other, "scheduled");
     let mut suspects = HashMap::new();
     let base = now_ms();
     for offset in [0, 61_000, 122_000] {
         sweep(&home, &mut suspects, base + offset);
     }
-    assert_eq!(
-        home.store()
-            .get_run(&run.id)
+    for id in [&run.id, &childless.id] {
+        let status = home
+            .store()
+            .get_run(id)
             .expect("reads")
             .expect("kept")
-            .status,
-        "running"
-    );
+            .status;
+        assert_eq!(status, "running");
+    }
     assert!(suspects.is_empty());
 }
 
 #[test]
-fn a_run_with_no_recorded_child_owned_by_the_live_daemon_stays_untouched() {
-    let home = Home::new();
-    let schedule = home.add("tick", &["echo", "ok"], Trigger::Every { seconds: 1 });
-    let run = home.begin(&schedule, "scheduled");
-    let mut suspects = HashMap::new();
-    let base = now_ms();
-    for offset in [0, 61_000] {
-        sweep(&home, &mut suspects, base + offset);
-    }
-    assert_eq!(
-        home.store()
-            .get_run(&run.id)
-            .expect("reads")
-            .expect("kept")
-            .status,
-        "running"
-    );
-}
-
-#[test]
 fn a_suspect_that_finishes_normally_between_sweeps_is_cleared_never_reaped() {
-    let home = Home::new();
-    let schedule = home.add("tick", &["echo", "ok"], Trigger::Every { seconds: 1 });
-    let run = home.begin(&schedule, "scheduled");
+    let home = TempStore::new();
+    let schedule = add(
+        &home,
+        "tick",
+        &["echo", "ok"],
+        Trigger::Every { seconds: 1 },
+    );
+    let run = begin(home.store(), &schedule, "scheduled");
     home.store()
         .set_run_process_group(&run.id, dead_pid())
         .expect("sets");
@@ -184,9 +141,14 @@ fn a_suspect_that_finishes_normally_between_sweeps_is_cleared_never_reaped() {
 
 #[test]
 fn reaps_a_manual_run_whose_owning_process_died() {
-    let home = Home::new();
-    let schedule = home.add("tick", &["echo", "ok"], Trigger::Every { seconds: 1 });
-    let run = home.begin(&schedule, "manual");
+    let home = TempStore::new();
+    let schedule = add(
+        &home,
+        "tick",
+        &["echo", "ok"],
+        Trigger::Every { seconds: 1 },
+    );
+    let run = begin(home.store(), &schedule, "manual");
     home.raw()
         .execute(
             "UPDATE runs SET owner_pid = ? WHERE id = ?",
@@ -209,9 +171,14 @@ fn reaps_a_manual_run_whose_owning_process_died() {
 
 #[test]
 fn a_reaped_run_keeps_its_status_when_the_wedged_finish_arrives_late() {
-    let home = Home::new();
-    let schedule = home.add("tick", &["echo", "ok"], Trigger::Every { seconds: 1 });
-    let run = home.begin(&schedule, "scheduled");
+    let home = TempStore::new();
+    let schedule = add(
+        &home,
+        "tick",
+        &["echo", "ok"],
+        Trigger::Every { seconds: 1 },
+    );
+    let run = begin(home.store(), &schedule, "scheduled");
     home.store()
         .set_run_process_group(&run.id, dead_pid())
         .expect("sets");
@@ -244,7 +211,7 @@ fn a_reaped_run_keeps_its_status_when_the_wedged_finish_arrives_late() {
 
 #[test]
 fn only_one_daemon_holds_the_lock_and_a_displaced_one_learns_it() {
-    let home = Home::new();
+    let home = TempStore::new();
     let store = home.store();
     let live = |holder: &crate::store::DaemonInfo| daemon_is_live(Some(holder));
     assert_eq!(
@@ -271,13 +238,8 @@ fn only_one_daemon_holds_the_lock_and_a_displaced_one_learns_it() {
     );
     assert!(!store.heartbeat(me()).expect("beats"));
     assert!(store.heartbeat(rival).expect("beats"));
-}
-
-fn fast() -> Timing {
-    Timing {
-        tick: Duration::from_millis(50),
-        ..Timing::default()
-    }
+    store.clear_daemon(rival).expect("clears");
+    assert_eq!(store.read_daemon().expect("reads"), None);
 }
 
 /// Runs the loop on its own thread and connection until `stop` is set.
@@ -294,7 +256,6 @@ fn spawn_loop(
             version: "test",
             retention_ms,
             log: quiet(),
-            timing: fast(),
         })
     })
 }
@@ -309,9 +270,9 @@ fn stop_after(stop: &Arc<AtomicBool>, delay: Duration) {
 
 #[test]
 fn recovery_terminates_the_process_group_a_dead_daemon_left_running() {
-    let home = Home::new();
-    let schedule = home.add("orphaned", &["sleep", "30"], Trigger::Manual);
-    let run = home.begin(&schedule, "scheduled");
+    let home = TempStore::new();
+    let schedule = add(&home, "orphaned", &["sleep", "30"], Trigger::Manual);
+    let run = begin(home.store(), &schedule, "scheduled");
     let mut leftover = Command::new("sleep")
         .arg("30")
         .process_group(0)
@@ -329,7 +290,7 @@ fn recovery_terminates_the_process_group_a_dead_daemon_left_running() {
         .expect("orphans");
     let stop = Arc::new(AtomicBool::new(false));
     stop_after(&stop, Duration::from_millis(1500));
-    spawn_loop(home.path.clone(), Arc::clone(&stop), None)
+    spawn_loop(home.home.clone(), Arc::clone(&stop), None)
         .join()
         .expect("joins")
         .expect("runs");
@@ -347,10 +308,15 @@ fn recovery_terminates_the_process_group_a_dead_daemon_left_running() {
 
 #[test]
 fn shutdown_interrupts_runs_in_flight_and_leaves_no_processes_behind() {
-    let home = Home::new();
-    home.add("long", &["sleep", "30"], Trigger::Every { seconds: 1 });
+    let home = TempStore::new();
+    add(
+        &home,
+        "long",
+        &["sleep", "30"],
+        Trigger::Every { seconds: 1 },
+    );
     let stop = Arc::new(AtomicBool::new(false));
-    let running = spawn_loop(home.path.clone(), Arc::clone(&stop), None);
+    let running = spawn_loop(home.home.clone(), Arc::clone(&stop), None);
     let deadline = Instant::now() + Duration::from_secs(5);
     let in_flight = loop {
         let active = home.store().active_runs().expect("lists");
@@ -376,13 +342,13 @@ fn shutdown_interrupts_runs_in_flight_and_leaves_no_processes_behind() {
 
 #[test]
 fn the_daemon_prunes_history_past_its_retention() {
-    let home = Home::new();
-    let schedule = home.add("old", &["true"], Trigger::Manual);
-    let stale = home.begin(&schedule, "manual");
+    let home = TempStore::new();
+    let schedule = add(&home, "old", &["true"], Trigger::Manual);
+    let stale = begin(home.store(), &schedule, "manual");
     home.store()
         .finish_run(&stale.id, "succeeded", None, Some(0))
         .expect("finishes");
-    let fresh = home.begin(&schedule, "manual");
+    let fresh = begin(home.store(), &schedule, "manual");
     home.store()
         .finish_run(&fresh.id, "succeeded", None, Some(0))
         .expect("finishes");
@@ -394,7 +360,7 @@ fn the_daemon_prunes_history_past_its_retention() {
         .expect("ages");
     let stop = Arc::new(AtomicBool::new(false));
     stop_after(&stop, Duration::from_millis(500));
-    spawn_loop(home.path.clone(), Arc::clone(&stop), Some(30 * 86_400_000))
+    spawn_loop(home.home.clone(), Arc::clone(&stop), Some(30 * 86_400_000))
         .join()
         .expect("joins")
         .expect("runs");
@@ -411,14 +377,19 @@ fn the_daemon_prunes_history_past_its_retention() {
 
 #[test]
 fn a_second_daemon_refuses_while_the_first_is_live_and_overlaps_are_skipped() {
-    let home = Home::new();
-    let schedule = home.add("busy", &["sleep", "30"], Trigger::Every { seconds: 1 });
+    let home = TempStore::new();
+    let schedule = add(
+        &home,
+        "busy",
+        &["sleep", "30"],
+        Trigger::Every { seconds: 1 },
+    );
     // A run already in flight under this (live) process: every fire the
     // daemon claims for the schedule is recorded as skipped instead.
-    home.begin(&schedule, "manual");
+    begin(home.store(), &schedule, "manual");
     let stop = Arc::new(AtomicBool::new(false));
     stop_after(&stop, Duration::from_millis(2600));
-    spawn_loop(home.path.clone(), Arc::clone(&stop), None)
+    spawn_loop(home.home.clone(), Arc::clone(&stop), None)
         .join()
         .expect("joins")
         .expect("runs");
@@ -440,7 +411,6 @@ fn a_second_daemon_refuses_while_the_first_is_live_and_overlaps_are_skipped() {
         version: "test",
         retention_ms: None,
         log: quiet(),
-        timing: fast(),
     })
     .unwrap_err();
     assert_eq!(
@@ -451,13 +421,13 @@ fn a_second_daemon_refuses_while_the_first_is_live_and_overlaps_are_skipped() {
 
 #[test]
 fn the_daemon_log_rotates_by_size_and_keeps_three_old_files() {
-    let home = Home::new();
-    let log = open_daemon_log(&home.path, false);
+    let home = TempStore::new();
+    let log = open_daemon_log(&home.home, false);
     let line = "x".repeat(100_000);
     for _ in 0..260 {
         log(&line);
     }
-    let file = home.path.join("daemon.log");
+    let file = home.home.join("daemon.log");
     assert!(std::fs::metadata(&file).expect("exists").len() <= 5_000_000);
     assert_eq!(
         std::fs::metadata(&file)
