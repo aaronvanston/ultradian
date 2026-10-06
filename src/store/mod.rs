@@ -983,10 +983,10 @@ impl Store {
                 freed += i64::try_from(metadata.len()).unwrap_or(i64::MAX);
             }
             let _ = std::fs::remove_file(&path);
-            if let Some(parent) = path.parent() {
-                if !emptied.iter().any(|known| known == parent) {
-                    emptied.push(parent.to_path_buf());
-                }
+            if let Some(parent) = path.parent()
+                && !emptied.iter().any(|known| known == parent)
+            {
+                emptied.push(parent.to_path_buf());
             }
         }
         for directory in emptied {
@@ -1027,10 +1027,11 @@ impl Store {
         is_live: impl Fn(&DaemonInfo) -> bool,
     ) -> Result<Option<DaemonInfo>> {
         self.transaction(true, || {
-            if let Some(holder) = self.read_daemon()? {
-                if holder.pid != pid && is_live(&holder) {
-                    return Ok(Some(holder));
-                }
+            if let Some(holder) = self.read_daemon()?
+                && holder.pid != pid
+                && is_live(&holder)
+            {
+                return Ok(Some(holder));
             }
             self.db.execute(
                 "INSERT INTO daemon (id, pid, version, started_at, heartbeat_at)

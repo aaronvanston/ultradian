@@ -96,11 +96,26 @@ fn run_history(store: &Store) -> Result<Check, AppError> {
     })
 }
 
+/// The account's login name, as Node's os.userInfo() read it (from the
+/// password database, not $USER).
+fn account_name() -> Option<String> {
+    // SAFETY: getpwuid returns static storage or null; it is copied at once.
+    unsafe {
+        let entry = libc::getpwuid(libc::getuid());
+        if entry.is_null() || (*entry).pw_name.is_null() {
+            return None;
+        }
+        Some(
+            std::ffi::CStr::from_ptr((*entry).pw_name)
+                .to_string_lossy()
+                .into_owned(),
+        )
+    }
+}
+
 /// systemd's lingering for this user, when loginctl can say.
 fn systemd_linger() -> Option<bool> {
-    let user = std::env::var("USER")
-        .ok()
-        .or_else(|| std::env::var("LOGNAME").ok())?;
+    let user = account_name()?;
     let output = std::process::Command::new("loginctl")
         .args(["show-user", &user, "--property=Linger", "--value"])
         .stdin(std::process::Stdio::null())

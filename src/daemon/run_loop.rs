@@ -245,15 +245,15 @@ pub fn run_daemon_loop(options: LoopOptions) -> Result<(), AppError> {
                 &log,
             )?;
         }
-        if let Some(retention) = retention_ms {
-            if now_ms() - last_prune_at >= timing.retention_sweep_ms {
-                last_prune_at = now_ms();
-                let (removed, freed) = store.prune_history(last_prune_at - retention, None)?;
-                if removed > 0 {
-                    log(&format!(
-                        "pruned {removed} run(s) older than {retention}ms, freed {freed} bytes"
-                    ));
-                }
+        if let Some(retention) = retention_ms
+            && now_ms() - last_prune_at >= timing.retention_sweep_ms
+        {
+            last_prune_at = now_ms();
+            let (removed, freed) = store.prune_history(last_prune_at - retention, None)?;
+            if removed > 0 {
+                log(&format!(
+                    "pruned {removed} run(s) older than {retention}ms, freed {freed} bytes"
+                ));
             }
         }
         for (run, schedule) in store.claim_queued(pid)? {

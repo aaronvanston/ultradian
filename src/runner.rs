@@ -332,10 +332,10 @@ fn run_phase(
         thread::sleep(TICK);
     };
     let mut reap = || {
-        if status.is_none() {
-            if let Ok(Some(exited)) = child.try_wait() {
-                status = Some(exited);
-            }
+        if status.is_none()
+            && let Ok(Some(exited)) = child.try_wait()
+        {
+            status = Some(exited);
         }
     };
     match stopped {

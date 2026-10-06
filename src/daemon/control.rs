@@ -121,10 +121,11 @@ pub fn start_daemon(store: &Store) -> Result<DaemonInfo, AppError> {
     // Not waited on: the daemon outlives this command.
     drop(child);
     for _ in 0..50 {
-        if let Some(info) = store.read_daemon()? {
-            if info.pid == child_pid && daemon_is_live(Some(&info)) {
-                return Ok(info);
-            }
+        if let Some(info) = store.read_daemon()?
+            && info.pid == child_pid
+            && daemon_is_live(Some(&info))
+        {
+            return Ok(info);
         }
         sleep_ms(100);
     }
@@ -260,13 +261,12 @@ fn wait_for_live(
     previous_pid: Option<i64>,
 ) -> Result<DaemonInfo, AppError> {
     for _ in 0..100 {
-        if let Some(info) = store.read_daemon()? {
-            if Some(info.pid) != previous_pid
-                && info.heartbeat_at >= since
-                && daemon_is_live(Some(&info))
-            {
-                return Ok(info);
-            }
+        if let Some(info) = store.read_daemon()?
+            && Some(info.pid) != previous_pid
+            && info.heartbeat_at >= since
+            && daemon_is_live(Some(&info))
+        {
+            return Ok(info);
         }
         sleep_ms(200);
     }

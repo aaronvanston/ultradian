@@ -445,15 +445,15 @@ impl Parser<'_> {
             OptValue::Bool(false)
         } else if option.takes_value {
             let value = value.unwrap_or_default();
-            if let Some(choices) = &option.choices {
-                if !choices.contains(&value) {
-                    let message = format!(
-                        "error: option '{}' argument '{value}' is invalid. Allowed choices are {}.",
-                        option.flags,
-                        choices.join(", ")
-                    );
-                    return Err(self.stop(chain, message));
-                }
+            if let Some(choices) = &option.choices
+                && !choices.contains(&value)
+            {
+                let message = format!(
+                    "error: option '{}' argument '{value}' is invalid. Allowed choices are {}.",
+                    option.flags,
+                    choices.join(", ")
+                );
+                return Err(self.stop(chain, message));
             }
             OptValue::Str(value)
         } else {
@@ -494,22 +494,21 @@ impl Parser<'_> {
                 }
                 break;
             }
-            if maybe_option(&arg) {
-                if let Some(option) = command.find_option(&arg) {
-                    if option.takes_value {
-                        let value = args.get(index).cloned();
-                        index += 1;
-                        if value.is_none() {
-                            let message =
-                                format!("error: option '{}' argument missing", option.flags);
-                            return Err(self.stop(chain, message));
-                        }
-                        self.emit(chain, option, value, values)?;
-                    } else {
-                        self.emit(chain, option, None, values)?;
+            if maybe_option(&arg)
+                && let Some(option) = command.find_option(&arg)
+            {
+                if option.takes_value {
+                    let value = args.get(index).cloned();
+                    index += 1;
+                    if value.is_none() {
+                        let message = format!("error: option '{}' argument missing", option.flags);
+                        return Err(self.stop(chain, message));
                     }
-                    continue;
+                    self.emit(chain, option, value, values)?;
+                } else {
+                    self.emit(chain, option, None, values)?;
                 }
+                continue;
             }
             if arg.len() > 2 && arg.starts_with('-') && !arg.starts_with("--") {
                 let first = arg.chars().nth(1).unwrap_or_default();
@@ -524,22 +523,15 @@ impl Parser<'_> {
                     continue;
                 }
             }
-            if arg.starts_with("--") && arg.len() > 2 {
-                if let Some(equals) = arg[2..].find('=').map(|offset| offset + 2) {
-                    if equals > 2 {
-                        if let Some(option) = command.find_option(&arg[..equals]) {
-                            if option.takes_value {
-                                self.emit(
-                                    chain,
-                                    option,
-                                    Some(arg[equals + 1..].to_owned()),
-                                    values,
-                                )?;
-                                continue;
-                            }
-                        }
-                    }
-                }
+            if arg.starts_with("--")
+                && arg.len() > 2
+                && let Some(equals) = arg[2..].find('=').map(|offset| offset + 2)
+                && equals > 2
+                && let Some(option) = command.find_option(&arg[..equals])
+                && option.takes_value
+            {
+                self.emit(chain, option, Some(arg[equals + 1..].to_owned()), values)?;
+                continue;
             }
             if !to_unknown
                 && maybe_option(&arg)

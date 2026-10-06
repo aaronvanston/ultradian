@@ -475,10 +475,9 @@ fn write_or_exit(mut stream: impl Write, text: &str) {
     if let Err(error) = stream
         .write_all(text.as_bytes())
         .and_then(|()| stream.flush())
+        && error.kind() == std::io::ErrorKind::BrokenPipe
     {
-        if error.kind() == std::io::ErrorKind::BrokenPipe {
-            std::process::exit(exit::OK);
-        }
+        std::process::exit(exit::OK);
     }
 }
 
