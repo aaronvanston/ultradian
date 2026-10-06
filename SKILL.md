@@ -177,34 +177,3 @@ ultradian version --json
 ```
 
 `doctor` is offline and fast. Do not echo environment values or credentials while reporting diagnostics.
-
-## Working in this repository
-
-Before editing, read `AGENTS.md`, then `docs/architecture.md`, then the module you are changing and its `__tests__` directory. `src/modules/schedules/` owns schedules, gates, runs, and the daemon; `src/modules/system/` owns version, doctor, schema, describe, and completion.
-
-Maintain these invariants:
-
-- a command is declared once with `defineCommand`;
-- handlers return typed outcomes and do not print;
-- stdout carries data and stderr carries diagnostics;
-- options and output cross Zod schemas;
-- machine and non-interactive modes never prompt or animate;
-- expected errors use stable codes and recovery hints; and
-- writes have an explicit headless confirmation route.
-
-The full implementation guide is `docs/extending.md`.
-
-## Validate changes
-
-```bash
-bun run ci
-```
-
-For presentation changes, also check a real terminal and a plain one:
-
-```bash
-NO_COLOR=1 bun run dev -- list
-bun run dev -- status
-```
-
-Generated `docs/commands.md` must be committed.

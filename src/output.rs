@@ -1,7 +1,7 @@
 //! The machine-readable surface: success and error envelopes, and the time
 //! format every record uses. 0.2.1 built these with JSON.stringify, and
-//! consumers such as Arbor scrape the text, so spacing, key order and
-//! number formatting are part of the contract.
+//! scripts that consume the output parse the text, so spacing, key order
+//! and number formatting are part of the contract.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 

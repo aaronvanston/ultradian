@@ -7,7 +7,7 @@
 //! quirks are kept on purpose, including ones that look like bugs (an
 //! hour above 59 is never normalized; a fire found from inside the second
 //! half of an overlap can land before the instant it was asked about),
-//! because tests/fixtures/cron.json records exactly what croner answered.
+//! because the tables in triggers.rs pin what croner answered.
 //!
 //! Wall-clock times convert through the zone's UTC offsets: chrono-tz for
 //! IANA names, a fixed offset for `+10:00`-style zones, and the machine's

@@ -1,5 +1,5 @@
-//! `version`: the build's name, version, target and commit. Arbor's
-//! install script reads `data.version` under `set -e`, so this must always
+//! `version`: the build's name, version, target and commit. Install
+//! scripts read `data.version` under `set -e`, so this must always
 //! succeed. 0.3.0 reports `runtime: "rust"` where 0.2.x reported its Bun
 //! version.
 

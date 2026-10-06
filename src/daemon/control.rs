@@ -2,7 +2,7 @@
 //!
 //! Every service-manager call goes through [`control`], which runs
 //! `launchctl` or `systemctl` by name from PATH exactly as 0.2.1 did. The
-//! contract and service tests put stubs first on PATH, so nothing here
+//! command-line and service-call tests put stubs first on PATH, so nothing here
 //! reaches a real service manager under test.
 
 use std::fs::OpenOptions;
