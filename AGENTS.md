@@ -2,6 +2,10 @@
 
 Ultradian is a Bun and TypeScript CLI for gated schedules and workflows that invoke AI. Read `PRODUCT.md`, `DESIGN.md`, `docs/architecture.md`, and `docs/extending.md` before changing the engine, the schedules module, or the presentation contract.
 
+## Rust rewrite in progress
+
+Ultradian 0.3.0 is a Rust rewrite with the same contract. The Rust crate lives at the repository root (`Cargo.toml`, `src/`); the 0.2.x TypeScript code, with its scripts and tooling, lives in `legacy/` until 0.3.0 ships, so the two can be compared. Run the TypeScript gate from `legacy/` (`cd legacy && bun run ci`); paths such as `src/engine/` below mean `legacy/src/engine/` until the Rust modules replace them. The frozen 0.2.1 contract is in `tests/contract/` (golden outputs, replayed with `BIN=<binary> tests/contract/run.sh`), `src/catalog.json` (the `schema --json` catalog) and `tests/fixtures/` (cron results).
+
 ## How we work
 
 These principles govern how changes are judged in this repository, in priority order.

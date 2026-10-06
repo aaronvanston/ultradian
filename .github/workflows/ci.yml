@@ -17,6 +17,9 @@ jobs:
   verify:
     name: Verify (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: legacy
     strategy:
       fail-fast: false
       matrix:

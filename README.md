@@ -209,6 +209,8 @@ The generated command reference lives in [`docs/commands.md`](docs/commands.md).
 
 ## Development
 
+The 0.2.x TypeScript code lives in `legacy/` while the Rust rewrite lands; run these from there.
+
 ```bash
 bun run ci      # docs, lint, typecheck, tests, build
 bun run dev     # run from source

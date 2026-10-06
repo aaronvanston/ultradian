@@ -1,7 +1,7 @@
 name: Release
 
 # A tag such as v0.2.0 that matches package.json's version publishes that
-# version: the four archives and SHA256SUMS from scripts/build-release.ts.
+# version: the four archives and SHA256SUMS from legacy/scripts/build-release.ts.
 
 on:
   push:
@@ -19,6 +19,9 @@ jobs:
   build:
     name: Build
     runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: legacy
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
@@ -37,7 +40,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: release
-          path: dist/release/
+          path: legacy/dist/release/
           if-no-files-found: error
 
   check-linux:
