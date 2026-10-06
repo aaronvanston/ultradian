@@ -17,3 +17,6 @@ coverage/
 
 # OS cruft
 .DS_Store
+
+# Rust build output
+/target/
