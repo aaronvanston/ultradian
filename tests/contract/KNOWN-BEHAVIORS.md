@@ -17,7 +17,8 @@
 
 1. **`daemon stop` with a run in flight.** 0.2.1's daemon finished shutting down at once but its process stayed alive for 15 s on a leftover timer, so `daemon stop` (and the stop inside `install`) reported `daemon_stop_timeout`, exit 75. 0.3.0 exits when it is done. `overrides/daemon/22-daemon-stop.txt` records the new answer.
 2. **Pids at or below zero are never alive.** To `kill(2)` they name process groups, so a bad lock row in 0.2.1 could make `daemon stop` signal its own group. 0.3.0 treats them as dead and never signals pid 0 or 1.
-3. **`--catch-up` takes `0s`, `0m`, `0h` and `0d` as zero** (owner decision), and `version --json` reports `runtime: "rust"` in place of `bun`.
+3. **`--catch-up` takes `0s`, `0m`, `0h` and `0d` as zero** (owner decision), and `version --json` reports `runtime: "rust"` in place of `bun`. `doctor`'s "Bun runtime" check is now "Runtime", naming the Rust build.
+4. **Stopping a daemon that has already released its lock waits up to 30 s** for its pid to exit, instead of 15 s. A 0.2.1 daemon that was running a fire lingers about 15 s after shutting down, so without this an in-place upgrade from 0.2.1 (`daemon install`, then `daemon restart`) could fail with `daemon_stop_timeout`. `tests/service/upgrade.sh` runs that upgrade against a real 0.2.1 daemon.
 
 ## Not recorded here
 
