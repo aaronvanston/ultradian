@@ -21,6 +21,9 @@ use crate::store::{Run, Schedule, Store, is_pid_alive};
 const DAEMON_LOG_ROTATE_BYTES: usize = 5_000_000;
 const DAEMON_LOG_KEEP: u32 = 3;
 const TICK: Duration = Duration::from_secs(1);
+/// A third of HEARTBEAT_STALE_MS, so a tick slowed by a busy store still
+/// beats in time.
+const HEARTBEAT_EVERY_MS: i64 = 5_000;
 const STALL_SWEEP_MS: i64 = 30_000;
 /// How long a stalled run must stay that way before it is reaped.
 const STALL_CONFIRM_MS: i64 = 60_000;
@@ -225,10 +228,22 @@ pub fn run_daemon_loop(options: LoopOptions) -> Result<(), AppError> {
     let mut seen_version: Option<i64> = None;
     let mut next_due: Option<i64> = None;
 
+    let mut last_beat_at = started_at;
+
     let mut tick = |inflight: &mut Vec<JoinHandle<()>>| -> Result<bool, AppError> {
-        if !store.heartbeat(pid)? {
-            log("another daemon took over the lock; stopping");
-            return Ok(false);
+        // Between ticks, only another process (a CLI command, a fire's own
+        // connection, a rival daemon) can change the store, and any commit
+        // changes the data version. A rival can only take the lock that
+        // way, so the lock is checked on every change; otherwise the
+        // heartbeat is refreshed every HEARTBEAT_EVERY_MS, well inside the
+        // stale window.
+        let version = store.data_version()?;
+        if seen_version != Some(version) || now_ms() - last_beat_at >= HEARTBEAT_EVERY_MS {
+            if !store.heartbeat(pid)? {
+                log("another daemon took over the lock; stopping");
+                return Ok(false);
+            }
+            last_beat_at = now_ms();
         }
         if now_ms() - last_sweep_at >= STALL_SWEEP_MS {
             last_sweep_at = now_ms();
@@ -245,11 +260,8 @@ pub fn run_daemon_loop(options: LoopOptions) -> Result<(), AppError> {
                 ));
             }
         }
-        // Between ticks, only another process (a CLI command or a fire's
-        // own connection) can queue a run or change a schedule, and that
-        // changes the data version; otherwise nothing is due before the
-        // earliest next fire, so the claims are skipped.
-        let version = store.data_version()?;
+        // Without a change, nothing is due before the earliest next fire,
+        // so the claims are skipped.
         let now = now_ms();
         if seen_version == Some(version) && next_due.is_none_or(|due| due > now) {
             return Ok(true);
