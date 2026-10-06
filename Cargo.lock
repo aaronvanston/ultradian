@@ -531,7 +531,7 @@ dependencies = [
 
 [[package]]
 name = "ultradian"
-version = "0.3.0"
+version = "0.3.0-rc.1"
 dependencies = [
  "chrono",
  "chrono-tz",
