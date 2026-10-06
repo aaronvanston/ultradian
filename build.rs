@@ -25,6 +25,8 @@ fn link_args() {
     match target("OS").as_str() {
         "macos" => {
             println!("cargo:rustc-link-arg-bins=-Wl,-x,-S");
+            // Nothing looks symbols up in the executable itself.
+            println!("cargo:rustc-link-arg-bins=-Wl,-no_exported_symbols");
             // Chained fixups let dyld slide each pointer when its page is
             // first touched (page-in linking) instead of walking all ~33,000
             // of them, mostly chrono-tz's zone tables, on every launch.
