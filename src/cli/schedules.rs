@@ -622,21 +622,20 @@ fn run_lines(record: &RunRecord, ui: &Ui) -> String {
     lines.join("\n")
 }
 
+/// Statuses that mean the fire did not do what it was asked to.
+const UNSUCCESSFUL: [&str; 5] = [
+    "failed",
+    "gate_failed",
+    "timed_out",
+    "canceled",
+    "interrupted",
+];
+
 pub fn run(context: &Context) -> Result<Done, AppError> {
     let detach = options::flag(&context.options, "detach");
-    if !detach {
-        // The foreground fire needs the runner (phase 4). Refuse before the
-        // store records a run nothing would execute.
-        return Err(AppError::new(
-            "not_implemented",
-            format!(
-                "'{NAME} run' in the foreground is not implemented in this build yet; use --detach."
-            ),
-        ));
-    }
     let store = open_store()?;
     let schedule = store.require_schedule(&require_name(argument(context, 0).as_deref())?)?;
-    let Some(run) = store.begin_run(&schedule, "manual", true)? else {
+    let Some(run) = store.begin_run(&schedule, "manual", detach)? else {
         return Err(AppError::new(
             "run_in_flight",
             format!("\"{}\" already has a run in flight.", schedule.name),
@@ -646,14 +645,24 @@ pub fn run(context: &Context) -> Result<Done, AppError> {
             "Wait for it with '{NAME} status', or stop it with '{NAME} cancel <run_id>'."
         )));
     };
-    let record = run_record(&run);
+    if detach {
+        let record = run_record(&run);
+        let mut done = Done::new(&record, run_lines(&record, &context.ui));
+        done.outcome.hint = not_running_hint(
+            &store,
+            &format!(
+                "The daemon is not running; this run waits until it starts with '{NAME} daemon start'."
+            ),
+        )?;
+        return Ok(done);
+    }
+    crate::runner::watch_for_shutdown();
+    let finished = crate::runner::execute_fire(&store, &schedule, &run, &crate::runner::SHUTDOWN)?;
+    let record = run_record(&finished);
     let mut done = Done::new(&record, run_lines(&record, &context.ui));
-    done.outcome.hint = not_running_hint(
-        &store,
-        &format!(
-            "The daemon is not running; this run waits until it starts with '{NAME} daemon start'."
-        ),
-    )?;
+    if UNSUCCESSFUL.contains(&finished.status.as_str()) {
+        done.outcome.exit_code = exit::ERROR;
+    }
     Ok(done)
 }
 
