@@ -222,6 +222,8 @@ pub fn run_daemon_loop(options: LoopOptions) -> Result<(), AppError> {
     let mut suspects: HashMap<String, i64> = HashMap::new();
     let mut last_sweep_at = started_at;
     let mut last_prune_at = 0_i64;
+    let mut seen_version: Option<i64> = None;
+    let mut next_due: Option<i64> = None;
 
     let mut tick = |inflight: &mut Vec<JoinHandle<()>>| -> Result<bool, AppError> {
         if !store.heartbeat(pid)? {
@@ -242,6 +244,15 @@ pub fn run_daemon_loop(options: LoopOptions) -> Result<(), AppError> {
                     "pruned {removed} run(s) older than {retention}ms, freed {freed} bytes"
                 ));
             }
+        }
+        // Between ticks, only another process (a CLI command or a fire's
+        // own connection) can queue a run or change a schedule, and that
+        // changes the data version; otherwise nothing is due before the
+        // earliest next fire, so the claims are skipped.
+        let version = store.data_version()?;
+        let now = now_ms();
+        if seen_version == Some(version) && next_due.is_none_or(|due| due > now) {
+            return Ok(true);
         }
         for (run, schedule) in store.claim_queued(pid)? {
             inflight.push(launch(
@@ -284,6 +295,8 @@ pub fn run_daemon_loop(options: LoopOptions) -> Result<(), AppError> {
                 }
             }
         }
+        next_due = store.next_due_at()?;
+        seen_version = Some(version);
         Ok(true)
     };
 

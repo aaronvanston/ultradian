@@ -700,6 +700,24 @@ impl Store {
         })
     }
 
+    /// The earliest fire still to come, of every active schedule and job:
+    /// nothing is due before it unless another process changes the store.
+    pub fn next_due_at(&self) -> Result<Option<i64>> {
+        Ok(self.db.query_row(
+            "SELECT MIN(next_fire_at) FROM schedules WHERE status = 'active'",
+            [],
+            |row| row.get(0),
+        )?)
+    }
+
+    /// Changes whenever another connection commits to the store, and only
+    /// then: this connection's own writes leave it as it was.
+    pub fn data_version(&self) -> Result<i64> {
+        Ok(self
+            .db
+            .query_row("PRAGMA data_version", [], |row| row.get(0))?)
+    }
+
     /// A run is in flight from the moment it is queued until it finishes.
     pub fn has_active_run(&self, schedule_id: &str) -> Result<bool> {
         Ok(self
