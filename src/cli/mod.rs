@@ -580,6 +580,18 @@ mod tests {
             Some(&OptValue::Bool(false))
         );
         assert_eq!(invocation.options.get("group"), None);
+        let equals = opts(&[
+            "add",
+            "eq",
+            "--every=5m",
+            "--gate-mode=exit",
+            "--timeout=1h",
+            "--",
+            "echo",
+        ]);
+        assert_eq!(string(&equals, "every").as_deref(), Some("5m"));
+        assert_eq!(string(&equals, "gateMode").as_deref(), Some("exit"));
+        assert_eq!(string(&equals, "timeout").as_deref(), Some("1h"));
         let short = opts(&["rm", "a", "-y"]);
         assert_eq!(short.options.get("yes"), Some(&OptValue::Bool(true)));
         let add = opts(&["add", "a", "--", "echo"]);

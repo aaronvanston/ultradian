@@ -3,7 +3,7 @@
 //! the renderers.
 
 use std::os::unix::fs::PermissionsExt;
-use std::os::unix::process::CommandExt;
+use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::process::Command;
 
 use super::*;
@@ -302,7 +302,20 @@ fn recovery_terminates_the_process_group_a_dead_daemon_left_running() {
             .status,
         "interrupted"
     );
-    let _ = leftover.wait();
+    // The daemon's recovery signals the group; `sleep 30` would otherwise
+    // run on long past this deadline.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let status = loop {
+        if let Some(status) = leftover.try_wait().expect("waits") {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            let _ = leftover.kill();
+            panic!("the leftover group was never stopped");
+        }
+        thread::sleep(Duration::from_millis(50));
+    };
+    assert_eq!(status.signal(), Some(libc::SIGTERM));
     assert!(!group_is_alive(pgid));
 }
 

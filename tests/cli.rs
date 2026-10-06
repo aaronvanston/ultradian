@@ -134,14 +134,18 @@ impl Drop for Sandbox {
     }
 }
 
-/// Every key of `expected` matches in `actual`, recursively through objects
-/// and same-length lists; other keys in `actual` are ignored.
+/// Every key of `expected` is present in `actual` and matches, recursively
+/// through objects and same-length lists; other keys in `actual` are
+/// ignored. A key expected as null must be there as null.
 #[track_caller]
 fn has(actual: &Value, expected: Value) {
     match (actual, &expected) {
         (Value::Object(actual), Value::Object(fields)) => {
             for (key, value) in fields {
-                has(actual.get(key).unwrap_or(&Value::Null), value.clone());
+                let found = actual
+                    .get(key)
+                    .unwrap_or_else(|| panic!("missing {key} in {actual:?}"));
+                has(found, value.clone());
             }
         }
         (Value::Array(actual), Value::Array(items)) => {
@@ -641,4 +645,73 @@ fn a_daemon_started_directly_runs_gated_fires_and_stops() {
         sandbox.ok("daemon stop --json"),
         json!({"pid": null, "stopped": false})
     );
+}
+
+/// `daemon install --dry-run` as 0.2.1 printed it on each platform.
+#[cfg(target_os = "macos")]
+const INSTALL_PLAN: &str = r#"{
+  "command": "daemon install",
+  "data": {
+    "environment": {
+      "PATH": "/opt/tools/bin:/usr/bin:/bin",
+      "ULTRADIAN_HOME": "<TMP>/state"
+    },
+    "path": "<TMP>/home/Library/LaunchAgents/com.ultradian.daemon.plist",
+    "platform": "launchd",
+    "program": [
+      "<BIN>",
+      "daemon",
+      "run"
+    ],
+    "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>Label</key>\n  <string>com.ultradian.daemon</string>\n  <key>ProgramArguments</key>\n  <array>\n    <string><BIN></string>\n    <string>daemon</string>\n    <string>run</string>\n  </array>\n  <key>RunAtLoad</key>\n  <true/>\n  <key>KeepAlive</key>\n  <dict>\n    <key>SuccessfulExit</key>\n    <false/>\n  </dict>\n  <key>ExitTimeOut</key>\n  <integer>30</integer>\n  <key>EnvironmentVariables</key>\n  <dict>\n    <key>PATH</key>\n    <string>/opt/tools/bin:/usr/bin:/bin</string>\n    <key>ULTRADIAN_HOME</key>\n    <string><TMP>/state</string>\n  </dict>\n  <key>StandardOutPath</key>\n  <string><TMP>/state/daemon.out.log</string>\n  <key>StandardErrorPath</key>\n  <string><TMP>/state/daemon.out.log</string>\n</dict>\n</plist>\n",
+    "mode": "plan"
+  },
+  "ok": true,
+  "schemaVersion": 2
+}
+"#;
+#[cfg(target_os = "linux")]
+const INSTALL_PLAN: &str = r#"{
+  "command": "daemon install",
+  "data": {
+    "environment": {
+      "PATH": "/opt/tools/bin:/usr/bin:/bin",
+      "ULTRADIAN_HOME": "<TMP>/state"
+    },
+    "path": "<TMP>/home/.config/systemd/user/ultradian.service",
+    "platform": "systemd",
+    "program": [
+      "<BIN>",
+      "daemon",
+      "run"
+    ],
+    "content": "[Unit]\nDescription=Ultradian scheduling daemon\n\n[Service]\nExecStart=\"<BIN>\" \"daemon\" \"run\"\nEnvironment=\"PATH=/opt/tools/bin:/usr/bin:/bin\"\nEnvironment=\"ULTRADIAN_HOME=<TMP>/state\"\nRestart=on-failure\nTimeoutStopSec=30\n\n[Install]\nWantedBy=default.target\n",
+    "mode": "plan"
+  },
+  "ok": true,
+  "schemaVersion": 2
+}
+"#;
+
+#[test]
+fn dry_runs_show_the_plan_and_write_nothing() {
+    let sandbox = Sandbox::new();
+    let plan = sandbox.ok("add plan --cron '0 2 * * *' --tz UTC --dry-run --json -- ./backup.sh");
+    has(
+        &plan,
+        json!({"mode": "plan", "schedule": {"id": "schedule_preview", "name": "plan", "cwd": sandbox.root.join("work").display().to_string()}}),
+    );
+    assert_eq!(sandbox.ok("list --json"), json!([]));
+
+    let out = sandbox.line("daemon install --dry-run --path /opt/tools/bin:/usr/bin:/bin --json");
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let record: Value = serde_json::from_str(&out.stdout).expect("JSON");
+    let binary = record["data"]["program"][0]
+        .as_str()
+        .expect("the binary")
+        .to_owned();
+    let masked = sandbox.mask(&out.stdout, &[]).replace(&binary, "<BIN>");
+    assert_eq!(masked, INSTALL_PLAN);
+    let home = std::fs::read_dir(sandbox.root.join("home")).expect("home");
+    assert_eq!(home.count(), 0, "nothing is written under HOME");
 }

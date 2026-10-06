@@ -422,6 +422,59 @@ mod tests {
         assert_eq!(next_fire_at(&spent, ms("2028-01-01T00:00:00Z")), None);
     }
 
+    /// Fires for a cron with no zone, read in the machine's local time, as
+    /// croner 10.0.1 gave them in 0.2.1 with the machine in
+    /// Australia/Sydney: expression | from | the next three fires. Covers
+    /// the 4 Oct 2026 gap and the 5 Apr 2026 repeated hour.
+    const LOCAL_FIRES: &str = "
+30 2 * * *        | 2026-10-03T15:59:59.999Z | 2026-10-03T16:30:00.000Z 2026-10-04T15:30:00.000Z 2026-10-05T15:30:00.000Z
+* 2 * * *         | 2026-10-03T15:59:59.999Z | 2026-10-03T16:00:00.000Z 2026-10-04T15:00:00.000Z 2026-10-04T15:01:00.000Z
+30 2 * * *        | 2026-04-04T15:59:59.999Z | 2026-04-05T16:30:00.000Z 2026-04-06T16:30:00.000Z 2026-04-07T16:30:00.000Z
+* 2 * * *         | 2026-04-04T15:59:59.999Z | 2026-04-05T16:00:00.000Z 2026-04-05T16:01:00.000Z 2026-04-05T16:02:00.000Z
+*/15 * * * *      | 2026-04-04T15:59:59.999Z | 2026-04-04T17:00:00.000Z 2026-04-04T17:15:00.000Z 2026-04-04T17:30:00.000Z
+15 30 2 * * *     | 2026-04-04T16:30:00.000Z | 2026-04-04T15:30:15.000Z 2026-04-05T16:30:15.000Z 2026-04-06T16:30:15.000Z
+0 9 * * MON-FRI   | 2026-07-01T12:34:56.789Z | 2026-07-01T23:00:00.000Z 2026-07-02T23:00:00.000Z 2026-07-05T23:00:00.000Z
+";
+
+    /// Local time comes from TZ, which is process-wide, so the rows run in
+    /// a child of this test binary with TZ set there alone.
+    #[test]
+    fn next_fires_in_the_local_zone_match_croner() {
+        let status = std::process::Command::new(std::env::current_exe().expect("test binary"))
+            .args([
+                "--ignored",
+                "--exact",
+                "triggers::tests::local_fires_in_sydney",
+            ])
+            .env("TZ", "Australia/Sydney")
+            .status()
+            .expect("runs");
+        assert!(status.success());
+    }
+
+    #[test]
+    #[ignore = "run by next_fires_in_the_local_zone_match_croner with TZ set"]
+    fn local_fires_in_sydney() {
+        assert_eq!(std::env::var("TZ").as_deref(), Ok("Australia/Sydney"));
+        let rows = LOCAL_FIRES.lines().filter(|row| !row.is_empty());
+        for row in rows {
+            let fields: Vec<&str> = row.split('|').map(str::trim).collect();
+            let [expression, from, fires] = fields[..] else {
+                panic!("{row}");
+            };
+            let trigger = Trigger::Cron {
+                expression: expression.to_owned(),
+                timezone: None,
+            };
+            let mut cursor = ms(from);
+            for next in fires.split(' ') {
+                cursor = next_fire_at(&trigger, cursor)
+                    .unwrap_or_else(|| panic!("{expression} from {from} stopped"));
+                assert_eq!(cursor, ms(next), "{expression} from {from}");
+            }
+        }
+    }
+
     /// --tz input as Intl canonicalized or refused it in 0.2.1.
     #[test]
     fn zone_names_canonicalize_like_intl() {

@@ -180,7 +180,9 @@ fn carries_a_0_1_database_over_with_its_schedules_and_run_history() {
               gate, command, working_directory, status, timeout_ms, schedule_group,
               created_at, next_fire_at, kind) VALUES
               ('s1', 'tick', 'cron', '0 * * * *', 'true', '[\"echo\",\"ok\"]', '/tmp',
-               'paused', 60000, 'ops', 1000, 5000, 'schedule');
+               'paused', 60000, 'ops', 1000, 5000, 'schedule'),
+              ('s3', 'daily', 'interval', '1d', NULL, '[\"true\"]', '/srv',
+               'active', NULL, NULL, 1000, 3000, 'schedule');
             INSERT INTO runs (id, schedule_id, schedule_name, machine_id,
               executor, trigger, status, gate_exit, action_exit, started_at,
               finished_at, log_pointer, owner_pid, working_directory, child_pid)
@@ -211,6 +213,9 @@ fn carries_a_0_1_database_over_with_its_schedules_and_run_history() {
         }
     );
     assert_eq!(schedule.working_directory, "/tmp");
+    // 0.1 stored the interval as typed; a day is 86,400 seconds.
+    let daily = store.get_schedule("daily").expect("reads").expect("kept");
+    assert_eq!(daily.trigger, Trigger::Every { seconds: 86_400 });
     let runs = store.export_runs(0, None).expect("runs");
     assert_eq!(
         runs.iter().map(|run| run.id.as_str()).collect::<Vec<_>>(),
