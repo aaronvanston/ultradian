@@ -23,6 +23,9 @@ src/style.rs          semantic color and symbols, with ASCII fallbacks
 src/store/            the SQLite store: queries (mod.rs), ordered migrations (schema.rs),
                       the 0.1 upgrade (legacy.rs)
 src/triggers.rs       triggers, durations, zone names;  src/cron.rs  cron next fires
+src/zones.rs          IANA zone names and offsets, from tables build.rs compiles
+build.rs              compiles catalog.json into statics and the tz database into
+                      offset tables, and sets release link flags
 src/runner.rs         one fire: gate, action, process groups, timeout, cancel, log
 src/daemon/           the tick loop (run_loop.rs), start/stop and the supervisors
                       (control.rs), the plist, unit and service PATH (service.rs)
@@ -53,7 +56,7 @@ The store is the only channel between them. There is no socket, no RPC, and no r
 
 ### Triggers
 
-`src/triggers.rs` parses the three trigger kinds and computes the next fire. `src/cron.rs` is a port of [croner](https://github.com/hexagon/croner) 10.0.1, which 0.2.x used, so cron expressions parse and fire the same way, quirks included; zones come from embedded tz data; intervals parse durations such as `30s`, `15m`, `2h`, and `1d`; manual schedules have no next fire and only move through `run`.
+`src/triggers.rs` parses the three trigger kinds and computes the next fire. `src/cron.rs` is a port of [croner](https://github.com/hexagon/croner) 10.0.1, which 0.2.x used, so cron expressions parse and fire the same way, quirks included; named zones come from offset tables build.rs compiles from the tz files chrono-tz ships (a test checks every zone against chrono-tz), and the machine's own zone from the C library (TZ, else /etc/localtime); intervals parse durations such as `30s`, `15m`, `2h`, and `1d`; manual schedules have no next fire and only move through `run`.
 
 ### One-shot jobs
 
@@ -101,6 +104,10 @@ The run record is the public integration surface. It carries stable `schedule_id
 - automatic shell configuration edits;
 - an automatic update mechanism; and
 - commands loaded at runtime: every command is compiled in.
+
+## 0.3.1 notes
+
+0.3.1 keeps 0.3.0's contract; it starts faster, is half the size and idles lighter. One edge moved: with `TZ` set to a name that isn't a zone, schedules without `--tz` now read UTC, as the C library does; 0.3.0 fell back to the machine's zone. Named zones and every valid `TZ` give the same next fires as before.
 
 ## 0.3.0 notes
 
