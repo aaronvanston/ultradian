@@ -1,12 +1,10 @@
 //! What makes a schedule fire: cron expressions in a zone, fixed intervals,
 //! or nothing (manual). Durations are parsed here too.
 
-use chrono::{DateTime, Local, TimeZone, Utc};
-use croner::Cron;
-use croner::parser::{CronParser, Seconds, Year};
 use serde::Serialize;
 use serde::ser::{SerializeStruct, Serializer};
 
+use crate::cron::{self, Pattern, Zone};
 use crate::errors::AppError;
 
 /// When a schedule fires. A cron trigger with no zone reads its expression
@@ -121,31 +119,73 @@ pub fn format_seconds(seconds: i64) -> String {
     format!("{seconds}s")
 }
 
+/// Names ICU still accepts that tz data has since dropped, with the zone
+/// they meant.
+const RETIRED_ZONES: [(&str, &str); 2] = [
+    ("Canada/East-Saskatchewan", "America/Regina"),
+    ("US/Pacific-New", "America/Los_Angeles"),
+];
+
+/// An offset zone as Intl reads one: `+HH`, `+HHMM` or `+HH:MM` (either
+/// sign), at most 23:59. Returns its seconds east of UTC.
+fn offset_seconds(zone: &str) -> Option<i64> {
+    let (sign, rest) = match zone.as_bytes().first()? {
+        b'+' => (1, &zone[1..]),
+        b'-' => (-1, &zone[1..]),
+        _ => return None,
+    };
+    let digits = |text: &str| text.len() == 2 && text.bytes().all(|byte| byte.is_ascii_digit());
+    let (hours, minutes) = match rest.len() {
+        2 => (rest, "00"),
+        4 => (&rest[..2], &rest[2..]),
+        5 if rest.as_bytes()[2] == b':' => (&rest[..2], &rest[3..]),
+        _ => return None,
+    };
+    if !digits(hours) || !digits(minutes) {
+        return None;
+    }
+    let (hours, minutes): (i64, i64) = (hours.parse().ok()?, minutes.parse().ok()?);
+    (hours <= 23 && minutes <= 59).then_some(sign * (hours * 3600 + minutes * 60))
+}
+
+/// A zone name as Intl canonicalizes it and the zone to compute in: IANA
+/// names matched without regard to case and kept as named (Intl doesn't
+/// resolve links such as US/Eastern), offsets as `+HH:MM`.
+fn resolve_zone(name: &str) -> Option<(String, Zone)> {
+    if let Some(seconds) = offset_seconds(name) {
+        let minutes = seconds.abs() / 60;
+        let sign = if seconds < 0 { '-' } else { '+' };
+        return Some((
+            format!("{sign}{:02}:{:02}", minutes / 60, minutes % 60),
+            Zone::Fixed(seconds),
+        ));
+    }
+    if let Some((retired, target)) = RETIRED_ZONES
+        .iter()
+        .find(|(retired, _)| retired.eq_ignore_ascii_case(name))
+    {
+        let tz = chrono_tz::Tz::from_str_insensitive(target).ok()?;
+        return Some(((*retired).to_owned(), Zone::Named(tz)));
+    }
+    chrono_tz::Tz::from_str_insensitive(name)
+        .ok()
+        .map(|tz| (tz.name().to_owned(), Zone::Named(tz)))
+}
+
 /// Checks a --tz value and returns the zone's own spelling, so
 /// `australia/sydney` is stored as `Australia/Sydney`.
 pub fn require_timezone(zone: &str) -> Result<String, AppError> {
-    chrono_tz::Tz::from_str_insensitive(zone)
-        .map(|tz| tz.name().to_owned())
-        .map_err(|_| {
-            AppError::usage("invalid_timezone", format!("Unknown time zone \"{zone}\"."))
-                .hint("Use an IANA zone name such as Australia/Sydney or America/New_York.")
-        })
+    resolve_zone(zone).map(|(name, _)| name).ok_or_else(|| {
+        AppError::usage("invalid_timezone", format!("Unknown time zone \"{zone}\"."))
+            .hint("Use an IANA zone name such as Australia/Sydney or America/New_York.")
+    })
 }
 
-fn cron_parser() -> CronParser {
-    // croner's defaults, as in JavaScript: optional seconds and year, day of
-    // month and day of week combined with OR.
-    CronParser::builder()
-        .seconds(Seconds::Optional)
-        .year(Year::Optional)
-        .build()
-}
-
-fn parse_cron(expression: &str) -> Result<Cron, AppError> {
-    cron_parser().parse(expression).map_err(|error| {
+fn parse_cron(expression: &str) -> Result<Pattern, AppError> {
+    Pattern::parse(expression).map_err(|message| {
         AppError::usage(
             "invalid_cron",
-            format!("Invalid cron expression \"{expression}\": {error}"),
+            format!("Invalid cron expression \"{expression}\": {message}"),
         )
     })
 }
@@ -199,27 +239,22 @@ pub fn describe_trigger(trigger: &Trigger) -> String {
     }
 }
 
-fn next_in<Z: TimeZone>(cron: &Cron, zone: &Z, from_ms: i64) -> Option<i64> {
-    let from: DateTime<Z> = zone.timestamp_millis_opt(from_ms).single()?;
-    cron.find_next_occurrence(&from, false)
-        .ok()
-        .map(|next| next.timestamp_millis())
-}
-
-/// The first fire strictly after `from_ms`, or none for a manual trigger
-/// (or a cron expression with no time left, such as a past year).
+/// The first fire after `from_ms` (croner's nextRun), or none for a
+/// manual trigger or a cron expression with no time left.
 pub fn next_fire_at(trigger: &Trigger, from_ms: i64) -> Option<i64> {
     match trigger {
         Trigger::Cron {
             expression,
             timezone,
         } => {
-            let cron = parse_cron(expression).ok()?;
-            match timezone.as_deref().map(chrono_tz::Tz::from_str_insensitive) {
-                Some(Ok(zone)) => next_in(&cron, &zone, from_ms),
-                Some(Err(_)) => next_in(&cron, &Utc, from_ms),
-                None => next_in(&cron, &Local, from_ms),
-            }
+            let pattern = parse_cron(expression).ok()?;
+            let zone = match timezone {
+                None => Zone::Local,
+                // A zone 0.2.1 could store but no longer names a zone would
+                // have failed there too; there is no next fire to give.
+                Some(name) => resolve_zone(name)?.1,
+            };
+            cron::next_run(&pattern, zone, from_ms)
         }
         Trigger::Every { seconds } => Some(from_ms + seconds * 1000),
         Trigger::Manual => None,
@@ -282,10 +317,7 @@ mod fixtures {
             .expect("fixture is JSON")
     }
 
-    /// Phase 3 makes these exact; until then this reports how far apart the
-    /// two implementations are.
     #[test]
-    #[ignore = "phase 3: cron and zones match croner and Intl exactly"]
     fn next_fires_match_croner() {
         // SAFETY: tests that read local time run in this one test.
         unsafe { std::env::set_var("TZ", "Australia/Sydney") };
@@ -329,7 +361,6 @@ mod fixtures {
     }
 
     #[test]
-    #[ignore = "phase 3: cron and zones match croner and Intl exactly"]
     fn zone_names_canonicalize_like_intl() {
         let fixture = load("tz-names.json");
         let cases = fixture["cases"].as_array().expect("cases");
@@ -348,6 +379,51 @@ mod fixtures {
             wrong.len(),
             cases.len(),
             wrong[..wrong.len().min(30)].join("\n")
+        );
+    }
+}
+
+#[cfg(test)]
+mod error_fixtures {
+    use serde_json::Value;
+
+    use super::*;
+
+    /// Every expression croner refused, with the message invalid_cron
+    /// carries, and the odd ones it took.
+    #[test]
+    fn invalid_cron_matches_croner() {
+        let path = format!(
+            "{}/tests/fixtures/cron-errors.json",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let fixture: Value =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("fixture exists"))
+                .expect("fixture is JSON");
+        let cases = fixture["cases"].as_array().expect("cases");
+        let mut wrong = Vec::new();
+        for case in cases {
+            let expression = case["expr"].as_str().unwrap_or_default();
+            let got = parse_trigger(Some(expression), None, Some("UTC"));
+            let ok = match (&got, case["accepted"].as_bool()) {
+                (Ok(_), Some(true)) => true,
+                (Err(error), None) => {
+                    error.code == case["code"].as_str().unwrap_or_default()
+                        && error.message == case["message"].as_str().unwrap_or_default()
+                        && error.exit_code == 2
+                }
+                _ => false,
+            };
+            if !ok {
+                wrong.push(format!("{expression:?}: {got:?}"));
+            }
+        }
+        assert!(
+            wrong.is_empty(),
+            "{} of {} differ:\n{}",
+            wrong.len(),
+            cases.len(),
+            wrong.join("\n")
         );
     }
 }

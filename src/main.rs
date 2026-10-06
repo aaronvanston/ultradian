@@ -10,6 +10,7 @@
 
 mod catalog;
 mod cli;
+mod cron;
 mod daemon;
 mod errors;
 mod ids;

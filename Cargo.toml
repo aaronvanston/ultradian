@@ -20,7 +20,6 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 # Embedded zone data, so hosts without /usr/share/zoneinfo still resolve
 # --tz names.
 chrono-tz = { version = "0.10", default-features = false, features = ["case-insensitive"] }
-croner = "4"
 getrandom = "0.3"
 libc = "0.2"
 # bundled: SQLite links statically, so the binary needs no system library.
