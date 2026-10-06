@@ -693,3 +693,34 @@ fn resolves_paths_like_node() {
         PathBuf::from("/srv/work")
     );
 }
+
+#[test]
+fn a_fire_late_by_exactly_its_window_still_runs() {
+    let temp = TempStore::new();
+    let store = temp.store();
+    // 0.2.1 misses a fire only when it is later than max(catch-up, 30 s).
+    add(store, "strict", Trigger::Every { seconds: 3600 }, 0);
+    add(store, "wide", Trigger::Every { seconds: 3600 }, 120_000);
+    let names = |schedules: &[Schedule]| {
+        let mut names: Vec<String> = schedules.iter().map(|s| s.name.clone()).collect();
+        names.sort();
+        names
+    };
+    let first = store
+        .get_schedule("strict")
+        .expect("reads")
+        .expect("kept")
+        .next_fire_at
+        .expect("next");
+    let (due, missed) = store.claim_due(first + ON_TIME_MS).expect("claims");
+    assert_eq!(
+        (names(&due), names(&missed)),
+        (vec!["strict".to_owned(), "wide".to_owned()], vec![])
+    );
+    let second = first + ON_TIME_MS + 3_600_000;
+    let (due, missed) = store.claim_due(second + 120_000).expect("claims");
+    assert_eq!(
+        (names(&due), names(&missed)),
+        (vec!["wide".to_owned()], vec!["strict".to_owned()])
+    );
+}
