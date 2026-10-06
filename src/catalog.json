@@ -3083,9 +3083,6 @@
           "arch": {
             "type": "string"
           },
-          "bun": {
-            "type": "string"
-          },
           "commit": {
             "type": "string"
           },
@@ -3095,15 +3092,19 @@
           "platform": {
             "type": "string"
           },
+          "runtime": {
+            "type": "string",
+            "const": "rust"
+          },
           "version": {
             "type": "string"
           }
         },
         "required": [
           "arch",
-          "bun",
           "name",
           "platform",
+          "runtime",
           "version"
         ],
         "additionalProperties": false

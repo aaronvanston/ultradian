@@ -1,18 +1,30 @@
 //! ultradian: gated schedules and workflows for invoking AI.
-//!
-//! The 0.3.0 rewrite of the 0.2.x TypeScript build in legacy/, landing in
-//! phases behind the frozen contract in tests/contract/.
 
-// Modules are declared before the code that uses them lands. Remove this
-// once every command is ported.
+// The rewrite lands in phases: ids, the remaining exit codes and other
+// shared pieces are in place before the commands that use them. Remove
+// this once every command is ported.
 #![allow(dead_code)]
+// Errors carry their whole envelope (code, message, hint, details) and are
+// only built on the way out, so their size never costs anything.
+#![allow(clippy::result_large_err)]
 
 mod catalog;
+mod cli;
 mod daemon;
+mod errors;
+mod ids;
+mod output;
 mod runner;
 mod store;
+mod style;
+mod triggers;
 
 fn main() {
-    eprintln!("ultradian {}: the Rust rewrite has no commands yet", env!("CARGO_PKG_VERSION"));
-    std::process::exit(1);
+    // Arguments that aren't valid UTF-8 are read lossily, as Node did.
+    let argv: Vec<String> = std::env::args_os()
+        .skip(1)
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect();
+    let code = cli::run(&argv, &mut cli::ProcessIo);
+    std::process::exit(code);
 }
