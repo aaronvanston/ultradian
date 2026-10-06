@@ -1,10 +1,18 @@
 # Ultradian
 
-Ultradian is a Bun and TypeScript CLI for gated schedules and workflows that invoke AI. Read `PRODUCT.md`, `DESIGN.md`, `docs/architecture.md`, and `docs/extending.md` before changing the engine, the schedules module, or the presentation contract.
+Ultradian is a CLI for gated schedules and workflows that invoke AI. Read `PRODUCT.md`, `DESIGN.md`, `docs/architecture.md`, and `docs/extending.md` before changing the engine, the schedules module, or the presentation contract.
 
-## Rust rewrite in progress
+## Rust rewrite (0.3.0)
 
-Ultradian 0.3.0 is a Rust rewrite with the same contract. The Rust crate lives at the repository root (`Cargo.toml`, `src/`); the 0.2.x TypeScript code, with its scripts and tooling, lives in `legacy/` until 0.3.0 ships, so the two can be compared. Run the TypeScript gate from `legacy/` (`cd legacy && bun run ci`); paths such as `src/engine/` below mean `legacy/src/engine/` until the Rust modules replace them. The frozen 0.2.1 contract is in `tests/contract/` (golden outputs, replayed with `BIN=<binary> tests/contract/run.sh`), `src/catalog.json` (the `schema --json` catalog) and `tests/fixtures/` (cron results).
+Ultradian 0.3.0 is a Rust rewrite with the same contract, and every command is ported. The crate lives at the repository root (`Cargo.toml`, `src/`, toolchain pinned in `rust-toolchain.toml`); the 0.2.x TypeScript code, with its scripts and tooling, stays in `legacy/` until 0.3.0 ships, so the two builds can be compared. Until then the rules below that name Bun, `bun:test`, `defineCommand` or `src/engine/` describe `legacy/`; Rust changes are checked with `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test`, then against the frozen 0.2.1 contract:
+
+- `BIN=<binary> tests/contract/run.sh` replays golden outputs recorded from 0.2.1 (`tests/contract/golden/`, intended 0.3.0 changes in `overrides/`). JSON, exit codes and error envelopes must match byte for byte.
+- `RS_BIN=<binary> tests/compat/run.sh` checks the database reads the same through both builds, both ways.
+- `tests/service/launchctl-calls.sh`, `systemctl-calls.sh` and `upgrade.sh` compare service-manager calls and the in-place upgrade against stubs, never the real launchd or systemd.
+- `tests/fixtures/` holds croner's and Intl's answers (`legacy/scripts/cron-fixtures.ts` regenerates them).
+- `tests/contract/KNOWN-BEHAVIORS.md` lists 0.2.1 behaviors kept on purpose and the few 0.3.0 changes.
+
+Every run of either build uses a throwaway HOME and ULTRADIAN_HOME with launchctl, systemctl and loginctl stubbed first on PATH; `daemon install` addresses the real user's launchd domain whatever HOME says.
 
 ## How we work
 

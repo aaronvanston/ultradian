@@ -55,12 +55,42 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
       - run: cargo build
-      # The scenarios the rewrite answers so far; the rest join as their
-      # phases land.
+      # Gates run under /bin/sh, which is dash on Ubuntu and bash's sh on
+      # macOS, so the contract's daemon scenario covers both shells.
+      - run: ls -l /bin/sh && readlink -f /bin/sh
       - run: BIN="$PWD/target/debug/ultradian" tests/contract/run.sh
       - run: RS_BIN=target/debug/ultradian tests/compat/run.sh
-      # launchd only; both scripts skip themselves on Linux.
       - run: bun run build
         working-directory: legacy
+      # Each service script runs only on its own platform and skips on the
+      # other: launchd on macOS, systemd on Linux.
       - run: TS_BIN=legacy/dist/ultradian RS_BIN=target/debug/ultradian tests/service/launchctl-calls.sh
       - run: TS_BIN=legacy/dist/ultradian RS_BIN=target/debug/ultradian tests/service/upgrade.sh
+      - run: OUT="$RUNNER_TEMP/systemd" TS_BIN=legacy/dist/ultradian RS_BIN=target/debug/ultradian tests/service/systemctl-calls.sh
+
+  linux-goldens:
+    name: Record 0.2.1's Linux goldens
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+        working-directory: legacy
+      - run: bun run build
+        working-directory: legacy
+      - run: cargo build
+      # The systemd unit preview, recorded from 0.2.1 exactly as the macOS
+      # goldens were, plus the systemctl and loginctl call transcripts.
+      - run: BIN="$PWD/legacy/dist/ultradian" tests/contract/run.sh --record service-linux
+      - run: OUT="$RUNNER_TEMP/systemd" TS_BIN=legacy/dist/ultradian RS_BIN=target/debug/ultradian tests/service/systemctl-calls.sh || true
+      - run: |
+          mkdir -p "$RUNNER_TEMP/goldens"
+          cp -R tests/contract/golden/service-linux "$RUNNER_TEMP/goldens/"
+          cp "$RUNNER_TEMP"/systemd/*.txt "$RUNNER_TEMP/goldens/" || true
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-goldens
+          path: ${{ runner.temp }}/goldens/
+          if-no-files-found: error
