@@ -14,7 +14,7 @@
 //! zone (honoring TZ) when a schedule has none, resolved the way JavaScript's
 //! `new Date(y, m, d, ...)` resolves local times.
 
-use chrono::{Local, NaiveDateTime, TimeZone};
+use chrono::NaiveDateTime;
 
 /// A zone a cron expression is read in.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -628,9 +628,31 @@ fn offset_ms(zone: Zone, instant: i64) -> i64 {
     let seconds = match zone {
         Zone::Named(zone) => zone.offset_seconds(utc.and_utc().timestamp()),
         Zone::Fixed(seconds) => seconds,
-        Zone::Local => i64::from(Local.offset_from_utc_datetime(&utc).local_minus_utc()),
+        Zone::Local => local_offset_seconds(instant),
     };
     seconds * 1000
+}
+
+unsafe extern "C" {
+    fn tzset();
+}
+
+/// The machine's offset at an instant, from the C library: TZ, else
+/// /etc/localtime. (chrono's local zone links CoreFoundation on macOS, which
+/// costs every process megabytes of memory.) tzset first, so a long-lived
+/// daemon follows a change of zone as chrono did; glibc's localtime_r reads
+/// the zone only once.
+fn local_offset_seconds(instant: i64) -> i64 {
+    let seconds: libc::time_t = instant.div_euclid(1000);
+    // SAFETY: tzset takes no arguments; localtime_r writes only `fields`.
+    unsafe {
+        tzset();
+        let mut fields: libc::tm = std::mem::zeroed();
+        if libc::localtime_r(&seconds, &mut fields).is_null() {
+            return 0;
+        }
+        fields.tm_gmtoff
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
