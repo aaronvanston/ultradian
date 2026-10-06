@@ -258,10 +258,9 @@ pub fn doctor(context: &Context) -> Result<Done, AppError> {
 
 /// Every word of every command path, once, sorted.
 fn tokens() -> Vec<String> {
-    let mut words: Vec<String> = catalog::catalog()
-        .commands
+    let mut words: Vec<String> = catalog::COMMANDS
         .iter()
-        .flat_map(|command| command.path.iter().cloned())
+        .flat_map(|command| command.path.iter().map(|&word| word.to_owned()))
         .collect();
     words.sort();
     words.dedup();
@@ -316,9 +315,9 @@ mod tests {
             let words: Vec<&str> = script
                 .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
                 .collect();
-            for command in &catalog::catalog().commands {
-                for word in &command.path {
-                    let count = words.iter().filter(|candidate| *candidate == word).count();
+            for command in catalog::COMMANDS {
+                for &word in command.path {
+                    let count = words.iter().filter(|&&candidate| candidate == word).count();
                     assert_eq!(count, 1, "{word} in {shell}");
                 }
             }

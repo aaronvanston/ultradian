@@ -353,6 +353,36 @@ fn shutdown_interrupts_runs_in_flight_and_leaves_no_processes_behind() {
     assert_eq!(home.store().read_daemon().expect("reads"), None);
 }
 
+/// The store is the only channel: a job another connection registers while
+/// the daemon idles, between due fires, is claimed on a following tick.
+#[test]
+fn a_job_registered_while_the_daemon_idles_runs_on_a_following_tick() {
+    let home = TempStore::new();
+    add(&home, "hourly", &["true"], Trigger::Every { seconds: 3600 });
+    let stop = Arc::new(AtomicBool::new(false));
+    let running = spawn_loop(home.home.clone(), Arc::clone(&stop), None);
+    thread::sleep(Duration::from_millis(1500));
+    let job = home
+        .store()
+        .add_once("late".into(), vec!["true".into()], "/tmp".into(), None)
+        .expect("registers");
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while home
+        .store()
+        .list_runs(Some(&job.name), 1)
+        .expect("lists")
+        .is_empty()
+    {
+        assert!(
+            Instant::now() < deadline,
+            "the idle daemon never claimed the job"
+        );
+        thread::sleep(Duration::from_millis(50));
+    }
+    stop.store(true, Ordering::SeqCst);
+    running.join().expect("joins").expect("runs");
+}
+
 #[test]
 fn the_daemon_prunes_history_past_its_retention() {
     let home = TempStore::new();

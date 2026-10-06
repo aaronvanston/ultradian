@@ -16,8 +16,7 @@ pub fn describe(context: &Context) -> Result<Done, AppError> {
         Some(ArgValue::One(Some(token))) => vec![token.clone()],
         _ => Vec::new(),
     };
-    let position = catalog::catalog()
-        .commands
+    let position = catalog::COMMANDS
         .iter()
         .position(|command| command.path == tokens);
     let Some(position) = position else {
@@ -27,15 +26,15 @@ pub fn describe(context: &Context) -> Result<Done, AppError> {
         )
         .hint(format!("Run '{NAME} schema --json' to list command paths.")));
     };
-    let command = &catalog::catalog().commands[position];
+    let command = &catalog::COMMANDS[position];
     let data = &catalog::json()["commands"][position];
     let ui = &context.ui;
     let mut lines = vec![
         ui.heading(&format!("{NAME} {}", command.path.join(" "))),
-        command.summary.clone(),
+        command.summary.to_owned(),
     ];
-    if let Some(description) = &command.description {
-        lines.extend([String::new(), description.clone()]);
+    if let Some(description) = command.description {
+        lines.extend([String::new(), description.to_owned()]);
     }
     if !command.arguments.is_empty() {
         let rows = command
@@ -43,13 +42,13 @@ pub fn describe(context: &Context) -> Result<Done, AppError> {
             .iter()
             .map(|argument| {
                 vec![
-                    argument.name.clone(),
+                    argument.name.to_owned(),
                     if argument.required {
                         "yes".into()
                     } else {
                         "no".into()
                     },
-                    argument.description.clone().unwrap_or_default(),
+                    argument.description.unwrap_or_default().to_owned(),
                 ]
             })
             .collect::<Vec<_>>();
@@ -63,7 +62,7 @@ pub fn describe(context: &Context) -> Result<Done, AppError> {
         let rows = command
             .options
             .iter()
-            .map(|option| vec![option.flags.clone(), option.description.clone()])
+            .map(|option| vec![option.flags.to_owned(), option.description.to_owned()])
             .collect::<Vec<_>>();
         lines.extend([
             String::new(),

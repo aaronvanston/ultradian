@@ -3,7 +3,7 @@
 //! are 0.2.1's, field for field; human renderings follow it closely.
 
 use std::io::{BufRead, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Serialize, Serializer};
 
@@ -187,11 +187,14 @@ fn require_name(value: Option<&str>) -> Result<String, AppError> {
     Ok(name.to_owned())
 }
 
-fn resolve_working_directory(value: Option<String>, base: &Path) -> Result<String, AppError> {
+/// `--cwd` resolved against the current directory, which is read only by
+/// the commands that take it: getcwd costs a few syscalls on every launch.
+fn resolve_working_directory(value: Option<String>) -> Result<String, AppError> {
+    let base = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
     let Some(value) = value else {
         return Ok(base.to_string_lossy().into_owned());
     };
-    let directory = resolve_path(base, Path::new(&value));
+    let directory = resolve_path(&base, Path::new(&value));
     if !std::fs::metadata(&directory).is_ok_and(|metadata| metadata.is_dir()) {
         return Err(AppError::usage(
             "invalid_working_directory",
@@ -298,7 +301,7 @@ pub fn add(context: &Context) -> Result<Done, AppError> {
     let timeout_ms = options::string(opts, "timeout")
         .map(|value| parse_duration(&value))
         .transpose()?;
-    let working_directory = resolve_working_directory(options::string(opts, "cwd"), &context.cwd)?;
+    let working_directory = resolve_working_directory(options::string(opts, "cwd"))?;
     let input = NewSchedule {
         name: name.clone(),
         group,
@@ -400,7 +403,7 @@ pub fn once(context: &Context) -> Result<Done, AppError> {
     let timeout_ms = options::string(opts, "timeout")
         .map(|value| parse_duration(&value))
         .transpose()?;
-    let working_directory = resolve_working_directory(options::string(opts, "cwd"), &context.cwd)?;
+    let working_directory = resolve_working_directory(options::string(opts, "cwd"))?;
     let job = store.add_once(name, command, working_directory, timeout_ms)?;
     #[derive(Serialize)]
     struct Queued {
@@ -949,7 +952,7 @@ pub fn set(context: &Context) -> Result<Done, AppError> {
         Toggle::Unset => {}
     }
     if let Some(cwd) = options::string(opts, "cwd") {
-        patch.working_directory = Some(resolve_working_directory(Some(cwd), &context.cwd)?);
+        patch.working_directory = Some(resolve_working_directory(Some(cwd))?);
     }
     if !command.is_empty() {
         patch.command = Some(command);

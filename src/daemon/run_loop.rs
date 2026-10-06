@@ -21,6 +21,9 @@ use crate::store::{Run, Schedule, Store, is_pid_alive};
 const DAEMON_LOG_ROTATE_BYTES: usize = 5_000_000;
 const DAEMON_LOG_KEEP: u32 = 3;
 const TICK: Duration = Duration::from_secs(1);
+/// A third of HEARTBEAT_STALE_MS, so a tick slowed by a busy store still
+/// beats in time.
+const HEARTBEAT_EVERY_MS: i64 = 5_000;
 const STALL_SWEEP_MS: i64 = 30_000;
 /// How long a stalled run must stay that way before it is reaped.
 const STALL_CONFIRM_MS: i64 = 60_000;
@@ -167,6 +170,18 @@ fn launch(
     })
 }
 
+/// Sleeps one tick in a single wait that a signal cuts short, so an idle
+/// daemon wakes once a tick rather than polling `stop`, and SIGTERM still
+/// stops it at once. (std's sleep resumes after a signal.)
+fn sleep_until_signal(duration: Duration) {
+    let request = libc::timespec {
+        tv_sec: libc::time_t::try_from(duration.as_secs()).unwrap_or(1),
+        tv_nsec: libc::c_long::from(duration.subsec_nanos()),
+    };
+    // SAFETY: nanosleep only reads `request`; the remainder isn't wanted.
+    unsafe { libc::nanosleep(&request, std::ptr::null_mut()) };
+}
+
 /// Runs until `stop` is set or another daemon takes the lock. Fires run
 /// concurrently; a schedule with a run still in flight is skipped and the
 /// skip recorded. On shutdown every fire in flight has its process group
@@ -210,11 +225,25 @@ pub fn run_daemon_loop(options: LoopOptions) -> Result<(), AppError> {
     let mut suspects: HashMap<String, i64> = HashMap::new();
     let mut last_sweep_at = started_at;
     let mut last_prune_at = 0_i64;
+    let mut seen_version: Option<i64> = None;
+    let mut next_due: Option<i64> = None;
+
+    let mut last_beat_at = started_at;
 
     let mut tick = |inflight: &mut Vec<JoinHandle<()>>| -> Result<bool, AppError> {
-        if !store.heartbeat(pid)? {
-            log("another daemon took over the lock; stopping");
-            return Ok(false);
+        // Between ticks, only another process (a CLI command, a fire's own
+        // connection, a rival daemon) can change the store, and any commit
+        // changes the data version. A rival can only take the lock that
+        // way, so the lock is checked on every change; otherwise the
+        // heartbeat is refreshed every HEARTBEAT_EVERY_MS, well inside the
+        // stale window.
+        let version = store.data_version()?;
+        if seen_version != Some(version) || now_ms() - last_beat_at >= HEARTBEAT_EVERY_MS {
+            if !store.heartbeat(pid)? {
+                log("another daemon took over the lock; stopping");
+                return Ok(false);
+            }
+            last_beat_at = now_ms();
         }
         if now_ms() - last_sweep_at >= STALL_SWEEP_MS {
             last_sweep_at = now_ms();
@@ -230,6 +259,12 @@ pub fn run_daemon_loop(options: LoopOptions) -> Result<(), AppError> {
                     "pruned {removed} run(s) older than {retention}ms, freed {freed} bytes"
                 ));
             }
+        }
+        // Without a change, nothing is due before the earliest next fire,
+        // so the claims are skipped.
+        let now = now_ms();
+        if seen_version == Some(version) && next_due.is_none_or(|due| due > now) {
+            return Ok(true);
         }
         for (run, schedule) in store.claim_queued(pid)? {
             inflight.push(launch(
@@ -272,6 +307,8 @@ pub fn run_daemon_loop(options: LoopOptions) -> Result<(), AppError> {
                 }
             }
         }
+        next_due = store.next_due_at()?;
+        seen_version = Some(version);
         Ok(true)
     };
 
@@ -282,9 +319,8 @@ pub fn run_daemon_loop(options: LoopOptions) -> Result<(), AppError> {
             Err(error) => log(&format!("tick failed: {}", error.message)),
         }
         inflight.retain(|fire| !fire.is_finished());
-        let wake = Instant::now() + TICK;
-        while Instant::now() < wake && !stop.load(Ordering::SeqCst) {
-            thread::sleep(Duration::from_millis(20));
+        if !stop.load(Ordering::SeqCst) {
+            sleep_until_signal(TICK);
         }
     }
 

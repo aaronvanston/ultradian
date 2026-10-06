@@ -15,6 +15,7 @@ mod runner;
 mod store;
 mod style;
 mod triggers;
+mod zones;
 
 fn main() {
     // Arguments that aren't valid UTF-8 are read lossily, as Node did.

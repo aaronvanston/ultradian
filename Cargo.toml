@@ -1,6 +1,6 @@
 [package]
 name = "ultradian"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 rust-version = "1.97"
 description = "Gated schedules and workflows for invoking AI"
@@ -15,22 +15,33 @@ name = "ultradian"
 path = "src/main.rs"
 
 [dependencies]
-chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
-# Embedded zone data, so hosts without /usr/share/zoneinfo still resolve
-# --tz names.
-chrono-tz = { version = "0.10", default-features = false, features = ["case-insensitive"] }
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 getrandom = "0.3"
 libc = "0.2"
 # bundled: SQLite links statically, so the binary needs no system library.
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.40", default-features = false, features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 # preserve_order: the embedded catalog is reprinted with its keys in the
 # order 0.2.1 wrote them, which isn't alphabetical.
 serde_json = { version = "1", features = ["preserve_order"] }
 
+[build-dependencies]
+# build.rs compiles chrono-tz's copy of the tz database into src/zones.rs's
+# tables, so hosts without /usr/share/zoneinfo still resolve --tz names.
+parse-zoneinfo = "0.4"
+# build.rs turns src/catalog.json into Rust statics; preserve_order keeps
+# the embedded JSON's keys in catalog.json's order.
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[dev-dependencies]
+# Supplies the tz files build.rs reads, and the answers src/zones.rs is
+# tested against.
+chrono-tz = { version = "0.10", default-features = false, features = ["case-insensitive"] }
+
 [profile.release]
-opt-level = "s"
+opt-level = "z"
 lto = "fat"
 codegen-units = 1
 panic = "abort"
-strip = true
+# build.rs strips release binaries at link time instead; see link_args there.
+strip = false

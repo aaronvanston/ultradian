@@ -23,6 +23,9 @@ src/style.rs          semantic color and symbols, with ASCII fallbacks
 src/store/            the SQLite store: queries (mod.rs), ordered migrations (schema.rs),
                       the 0.1 upgrade (legacy.rs)
 src/triggers.rs       triggers, durations, zone names;  src/cron.rs  cron next fires
+src/zones.rs          IANA zone names and offsets, from tables build.rs compiles
+build.rs              compiles catalog.json into statics and the tz database into
+                      offset tables, and sets release link flags
 src/runner.rs         one fire: gate, action, process groups, timeout, cancel, log
 src/daemon/           the tick loop (run_loop.rs), start/stop and the supervisors
                       (control.rs), the plist, unit and service PATH (service.rs)
@@ -53,7 +56,7 @@ The store is the only channel between them. There is no socket, no RPC, and no r
 
 ### Triggers
 
-`src/triggers.rs` parses the three trigger kinds and computes the next fire. `src/cron.rs` is a port of [croner](https://github.com/hexagon/croner) 10.0.1, which 0.2.x used, so cron expressions parse and fire the same way, quirks included; zones come from embedded tz data; intervals parse durations such as `30s`, `15m`, `2h`, and `1d`; manual schedules have no next fire and only move through `run`.
+`src/triggers.rs` parses the three trigger kinds and computes the next fire. `src/cron.rs` is a port of [croner](https://github.com/hexagon/croner) 10.0.1, which 0.2.x used, so cron expressions parse and fire the same way, quirks included; named zones come from offset tables build.rs compiles from the tz files chrono-tz ships (a test checks every zone against chrono-tz), and the machine's own zone from the C library (TZ, else /etc/localtime); intervals parse durations such as `30s`, `15m`, `2h`, and `1d`; manual schedules have no next fire and only move through `run`.
 
 ### One-shot jobs
 
@@ -79,7 +82,7 @@ Each process starts in its own session and process group, whose id is stored on 
 
 ### Daemon lifecycle
 
-`src/daemon/run_loop.rs` runs a one-second tick loop. Each tick writes a heartbeat row, starts runs queued by `run --detach`, claims every schedule whose `next_fire_at` has passed (advancing it in the same transaction so a claim happens once), and fires the claimed schedules concurrently. A tick that throws is logged and the loop carries on. Once a day it prunes runs and logs older than `ULTRADIAN_RETENTION` (default 30 days). A schedule whose previous run is still in flight records a `skipped` run, so the gap stays visible in its history.
+`src/daemon/run_loop.rs` runs a one-second tick loop. It refreshes its heartbeat row every five seconds, and at once whenever another process has written to the store, so a daemon that lost its lock notices on the next tick. Each tick starts runs queued by `run --detach`, claims every schedule whose `next_fire_at` has passed (advancing it in the same transaction so a claim happens once), and fires the claimed schedules concurrently. The claims are skipped while nothing can be due: no other process has committed to the store since the last claim (SQLite's `data_version`) and the earliest `next_fire_at` is still ahead. A tick that throws is logged and the loop carries on. Once a day it prunes runs and logs older than `ULTRADIAN_RETENTION` (default 30 days). A schedule whose previous run is still in flight records a `skipped` run, so the gap stays visible in its history.
 
 Liveness is the heartbeat row plus a `kill(pid, 0)` check: a daemon counts as live when its pid exists and its heartbeat is under fifteen seconds old. That single row enforces one instance. `daemon start` re-invokes this CLI as `daemon run`, detaches it, and polls until the child's own heartbeat appears before reporting success. `daemon stop` sends `SIGTERM` and waits for the row to clear. On shutdown every run still in flight has its process group terminated and is recorded as `interrupted`, so a stopped daemon never leaves work running. `daemon install` writes a launchd agent or systemd user unit that runs the binary at its current path with the login shell's `PATH`; `daemon restart` goes through that supervisor when one is installed, which is how `self install` followed by a restart upgrades in place.
 
@@ -101,6 +104,10 @@ The run record is the public integration surface. It carries stable `schedule_id
 - automatic shell configuration edits;
 - an automatic update mechanism; and
 - commands loaded at runtime: every command is compiled in.
+
+## 0.3.1 notes
+
+0.3.1 keeps 0.3.0's contract; it starts faster, is half the size and idles lighter. One edge moved: with `TZ` set to a name that isn't a zone, schedules without `--tz` now read UTC, as the C library does; 0.3.0 fell back to the machine's zone. Named zones and every valid `TZ` give the same next fires as before.
 
 ## 0.3.0 notes
 
