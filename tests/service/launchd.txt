@@ -1,0 +1,68 @@
+== lifecycle
+$ daemon install --path /usr/bin:/bin --json -> exit 0 
+  launchctl bootout gui/<UID>/com.ultradian.daemon
+  launchctl bootstrap gui/<UID> <HOME>/Library/LaunchAgents/com.ultradian.daemon.plist
+$ daemon install --path /usr/bin:/bin --json -> exit 0 
+  launchctl bootout gui/<UID>/com.ultradian.daemon
+  launchctl bootstrap gui/<UID> <HOME>/Library/LaunchAgents/com.ultradian.daemon.plist
+$ daemon restart --json -> exit 0 
+  launchctl kickstart -k gui/<UID>/com.ultradian.daemon
+$ daemon uninstall --json -> exit 0 
+  launchctl bootout gui/<UID>/com.ultradian.daemon
+$ daemon restart --json -> exit 0 
+$ daemon stop --json -> exit 0 
+== kickstart-refused
+$ daemon install --path /usr/bin:/bin --json -> exit 0 
+  launchctl bootout gui/<UID>/com.ultradian.daemon
+  launchctl bootstrap gui/<UID> <HOME>/Library/LaunchAgents/com.ultradian.daemon.plist
+$ daemon restart --json -> exit 75 "code": "daemon_start_timeout"
+  launchctl kickstart -k gui/<UID>/com.ultradian.daemon
+  launchctl bootstrap gui/<UID> <HOME>/Library/LaunchAgents/com.ultradian.daemon.plist
+$ daemon uninstall --json -> exit 0 
+  launchctl bootout gui/<UID>/com.ultradian.daemon
+== bootstrap-refused
+$ daemon install --path /usr/bin:/bin --json -> exit 75 "code": "daemon_install_failed"
+"details": "stub: bootstrap refused"
+  launchctl bootout gui/<UID>/com.ultradian.daemon
+  launchctl bootstrap gui/<UID> <HOME>/Library/LaunchAgents/com.ultradian.daemon.plist
+$ daemon uninstall --json -> exit 0 
+  launchctl bootout gui/<UID>/com.ultradian.daemon
+== installed
+$ daemon install --path /usr/bin:/bin --json -> exit 0 
+  launchctl bootout gui/<UID>/com.ultradian.daemon
+  launchctl bootstrap gui/<UID> <HOME>/Library/LaunchAgents/com.ultradian.daemon.plist
+left behind:
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.ultradian.daemon</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string><BIN></string>
+    <string>daemon</string>
+    <string>run</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ExitTimeOut</key>
+  <integer>30</integer>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/bin:/bin</string>
+    <key>ULTRADIAN_HOME</key>
+    <string><HOME>/state</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string><HOME>/state/daemon.out.log</string>
+  <key>StandardErrorPath</key>
+  <string><HOME>/state/daemon.out.log</string>
+</dict>
+</plist>

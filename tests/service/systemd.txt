@@ -1,0 +1,103 @@
+== lifecycle
+$ daemon install --path /usr/bin:/bin --json -> exit 0 
+  systemctl --user daemon-reload
+  systemctl --user enable --now ultradian.service
+$ daemon install --path /usr/bin:/bin --json -> exit 0 
+  systemctl --user daemon-reload
+  systemctl --user enable --now ultradian.service
+$ daemon restart --json -> exit 0 
+  systemctl --user restart ultradian.service
+$ daemon uninstall --json -> exit 0 
+  systemctl --user disable --now ultradian.service
+  systemctl --user daemon-reload
+$ daemon restart --json -> exit 0 
+$ daemon stop --json -> exit 0 
+== restart-refused
+$ daemon install --path /usr/bin:/bin --json -> exit 0 
+  systemctl --user daemon-reload
+  systemctl --user enable --now ultradian.service
+$ daemon restart --json -> exit 75 "code": "daemon_install_failed"
+"details": "stub: restart refused"
+  systemctl --user restart ultradian.service
+$ daemon uninstall --json -> exit 0 
+  systemctl --user disable --now ultradian.service
+  systemctl --user daemon-reload
+== enable-refused
+$ daemon install --path /usr/bin:/bin --json -> exit 75 "code": "daemon_install_failed"
+"details": "stub: enable refused"
+  systemctl --user daemon-reload
+  systemctl --user enable --now ultradian.service
+$ daemon uninstall --json -> exit 0 
+  systemctl --user disable --now ultradian.service
+  systemctl --user daemon-reload
+== reload-refused
+$ daemon install --path /usr/bin:/bin --json -> exit 75 "code": "daemon_install_failed"
+"details": "stub: daemon-reload refused"
+  systemctl --user daemon-reload
+$ daemon uninstall --json -> exit 0 
+  systemctl --user disable --now ultradian.service
+  systemctl --user daemon-reload
+== linger-on
+$ daemon install --path /usr/bin:/bin --json -> exit 0 
+  systemctl --user daemon-reload
+  systemctl --user enable --now ultradian.service
+$ doctor --json --compact -> exit 0 
+{"detail":"installed with systemd, lingering enabled","name":"Login service","status":"pass"}
+  loginctl show-user <USER> --property=Linger --value
+left behind:
+[Unit]
+Description=Ultradian scheduling daemon
+
+[Service]
+ExecStart="<BIN>" "daemon" "run"
+Environment="PATH=/usr/bin:/bin"
+Environment="ULTRADIAN_HOME=<HOME>/state"
+Restart=on-failure
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target
+== linger-off
+$ daemon install --path /usr/bin:/bin --json -> exit 0 
+  systemctl --user daemon-reload
+  systemctl --user enable --now ultradian.service
+$ doctor --json --compact -> exit 0 
+{"detail":"installed with systemd, but lingering is off: the daemon stops when your last session ends","fix":"Run 'loginctl enable-linger $USER'.","name":"Login service","status":"warn"}
+  loginctl show-user <USER> --property=Linger --value
+left behind:
+[Unit]
+Description=Ultradian scheduling daemon
+
+[Service]
+ExecStart="<BIN>" "daemon" "run"
+Environment="PATH=/usr/bin:/bin"
+Environment="ULTRADIAN_HOME=<HOME>/state"
+Restart=on-failure
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target
+== linger-unknown
+$ daemon install --path /usr/bin:/bin --json -> exit 0 
+  systemctl --user daemon-reload
+  systemctl --user enable --now ultradian.service
+$ doctor --json --compact -> exit 0 
+{"detail":"installed with systemd; lingering could not be checked","fix":"Run 'loginctl enable-linger $USER'.","name":"Login service","status":"warn"}
+  loginctl show-user <USER> --property=Linger --value
+left behind:
+[Unit]
+Description=Ultradian scheduling daemon
+
+[Service]
+ExecStart="<BIN>" "daemon" "run"
+Environment="PATH=/usr/bin:/bin"
+Environment="ULTRADIAN_HOME=<HOME>/state"
+Restart=on-failure
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target
+== not-installed
+$ doctor --json --compact -> exit 0 
+{"detail":"not installed; 'daemon start' runs until logout or reboot","name":"Login service","status":"pass"}
+$ daemon uninstall --json -> exit 0 
