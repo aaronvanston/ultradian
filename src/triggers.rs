@@ -100,8 +100,8 @@ pub fn parse_duration(value: &str) -> Result<i64, AppError> {
 }
 
 /// A catch-up window: a duration, or zero for "record a missed run
-/// instead". Zero may be written bare (`0`) or with any unit (`0m`), because
-/// Arbor sends `--catch-up 0m` for automations with no grace period.
+/// instead". Zero may be written bare (`0`) or with any unit (`0m`), since
+/// callers often write zero with the unit they use elsewhere.
 pub fn parse_catch_up(value: &str) -> Result<i64, AppError> {
     if value.trim() == "0" || matches!(split_duration(value), Some((0, _))) {
         return Ok(0);
@@ -302,128 +302,936 @@ mod tests {
         assert_eq!(format_seconds(90), "90s");
         assert_eq!(format_seconds(0), "0s");
     }
-}
 
-#[cfg(test)]
-mod fixtures {
-    //! The answers croner and Intl gave in 0.2.1, from
-    //! legacy/scripts/cron-fixtures.ts.
-    use super::*;
-    use serde_json::Value;
-
-    fn load(name: &str) -> Value {
-        let path = format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
-        serde_json::from_str(&std::fs::read_to_string(path).expect("fixture exists"))
-            .expect("fixture is JSON")
+    fn ms(instant: &str) -> i64 {
+        chrono::DateTime::parse_from_rfc3339(instant)
+            .expect("an RFC 3339 instant")
+            .timestamp_millis()
     }
 
+    /// Three fires in a row from each start, as croner 10.0.1 gave them in
+    /// 0.2.1. DST gaps fire late, repeated hours fire once, and the rest are
+    /// the field forms most likely to drift.
     #[test]
     fn next_fires_match_croner() {
-        // SAFETY: tests that read local time run in this one test.
-        unsafe { std::env::set_var("TZ", "Australia/Sydney") };
-        let fixture = load("cron.json");
-        let cases = fixture["cases"].as_array().expect("cases");
-        let mut wrong = Vec::new();
-        for case in cases {
+        let rows: &[(&str, &str, &str, [&str; 3])] = &[
+            // DST in Sydney: 02:00-03:00 is skipped on 4 Oct 2026 and repeated on 5 Apr 2026
+            (
+                "30 2 * * *",
+                "Australia/Sydney",
+                "2026-10-03T15:59:59.999Z",
+                [
+                    "2026-10-03T16:30:00.000Z",
+                    "2026-10-04T15:30:00.000Z",
+                    "2026-10-05T15:30:00.000Z",
+                ],
+            ),
+            (
+                "30 2 * * *",
+                "Australia/Sydney",
+                "2026-04-04T15:59:59.999Z",
+                [
+                    "2026-04-05T16:30:00.000Z",
+                    "2026-04-06T16:30:00.000Z",
+                    "2026-04-07T16:30:00.000Z",
+                ],
+            ),
+            (
+                "0 2 * * *",
+                "Australia/Sydney",
+                "2026-10-03T15:59:59.999Z",
+                [
+                    "2026-10-03T16:00:00.000Z",
+                    "2026-10-04T15:00:00.000Z",
+                    "2026-10-05T15:00:00.000Z",
+                ],
+            ),
+            (
+                "0 2 * * *",
+                "Australia/Sydney",
+                "2026-04-04T15:59:59.999Z",
+                [
+                    "2026-04-05T16:00:00.000Z",
+                    "2026-04-06T16:00:00.000Z",
+                    "2026-04-07T16:00:00.000Z",
+                ],
+            ),
+            (
+                "* 2 * * *",
+                "Australia/Sydney",
+                "2026-10-03T15:59:59.999Z",
+                [
+                    "2026-10-03T16:00:00.000Z",
+                    "2026-10-04T15:00:00.000Z",
+                    "2026-10-04T15:01:00.000Z",
+                ],
+            ),
+            (
+                "* 2 * * *",
+                "Australia/Sydney",
+                "2026-04-04T15:59:59.999Z",
+                [
+                    "2026-04-05T16:00:00.000Z",
+                    "2026-04-05T16:01:00.000Z",
+                    "2026-04-05T16:02:00.000Z",
+                ],
+            ),
+            (
+                "0 3 * * *",
+                "Australia/Sydney",
+                "2026-10-03T15:59:59.999Z",
+                [
+                    "2026-10-03T16:00:00.000Z",
+                    "2026-10-04T16:00:00.000Z",
+                    "2026-10-05T16:00:00.000Z",
+                ],
+            ),
+            (
+                "30 1 * * *",
+                "Australia/Sydney",
+                "2026-10-03T15:59:59.999Z",
+                [
+                    "2026-10-04T14:30:00.000Z",
+                    "2026-10-05T14:30:00.000Z",
+                    "2026-10-06T14:30:00.000Z",
+                ],
+            ),
+            (
+                "*/15 * * * *",
+                "Australia/Sydney",
+                "2026-04-04T15:59:59.999Z",
+                [
+                    "2026-04-04T17:00:00.000Z",
+                    "2026-04-04T17:15:00.000Z",
+                    "2026-04-04T17:30:00.000Z",
+                ],
+            ),
+            (
+                "0 */2 * * *",
+                "Australia/Sydney",
+                "2026-04-04T15:59:59.999Z",
+                [
+                    "2026-04-04T18:00:00.000Z",
+                    "2026-04-04T20:00:00.000Z",
+                    "2026-04-04T22:00:00.000Z",
+                ],
+            ),
+            (
+                "0 30 2 * * * *",
+                "Australia/Sydney",
+                "2026-10-03T15:59:59.999Z",
+                [
+                    "2026-10-03T16:30:00.000Z",
+                    "2026-10-04T15:30:00.000Z",
+                    "2026-10-05T15:30:00.000Z",
+                ],
+            ),
+            (
+                "15 30 2 * * *",
+                "Australia/Sydney",
+                "2026-04-04T15:59:59.999Z",
+                [
+                    "2026-04-05T16:30:15.000Z",
+                    "2026-04-06T16:30:15.000Z",
+                    "2026-04-07T16:30:15.000Z",
+                ],
+            ),
+            (
+                "30 2 * * *",
+                "Australia/Sydney",
+                "2026-04-04T16:30:00.000Z",
+                [
+                    "2026-04-05T16:30:00.000Z",
+                    "2026-04-06T16:30:00.000Z",
+                    "2026-04-07T16:30:00.000Z",
+                ],
+            ),
+            (
+                "0 2 * * *",
+                "Australia/Sydney",
+                "2026-10-03T14:30:00.000Z",
+                [
+                    "2026-10-03T16:00:00.000Z",
+                    "2026-10-04T15:00:00.000Z",
+                    "2026-10-05T15:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9 * * MON-FRI",
+                "Australia/Sydney",
+                "2026-07-01T12:34:56.789Z",
+                [
+                    "2026-07-01T23:00:00.000Z",
+                    "2026-07-02T23:00:00.000Z",
+                    "2026-07-05T23:00:00.000Z",
+                ],
+            ),
+            (
+                "@daily",
+                "Australia/Sydney",
+                "2026-12-31T23:59:59.999Z",
+                [
+                    "2027-01-01T13:00:00.000Z",
+                    "2027-01-02T13:00:00.000Z",
+                    "2027-01-03T13:00:00.000Z",
+                ],
+            ),
+            // DST in New York: 02:00-03:00 is skipped on 8 Mar 2026, 01:00-02:00 repeated on 1 Nov 2026
+            (
+                "30 2 * * *",
+                "America/New_York",
+                "2026-03-08T06:59:59.999Z",
+                [
+                    "2026-03-08T07:30:00.000Z",
+                    "2026-03-09T06:30:00.000Z",
+                    "2026-03-10T06:30:00.000Z",
+                ],
+            ),
+            (
+                "30 2 * * *",
+                "America/New_York",
+                "2026-11-01T05:59:59.999Z",
+                [
+                    "2026-11-01T07:30:00.000Z",
+                    "2026-11-02T07:30:00.000Z",
+                    "2026-11-03T07:30:00.000Z",
+                ],
+            ),
+            (
+                "30 1 * * *",
+                "America/New_York",
+                "2026-03-08T06:59:59.999Z",
+                [
+                    "2026-03-09T05:30:00.000Z",
+                    "2026-03-10T05:30:00.000Z",
+                    "2026-03-11T05:30:00.000Z",
+                ],
+            ),
+            (
+                "30 1 * * *",
+                "America/New_York",
+                "2026-11-01T05:59:59.999Z",
+                [
+                    "2026-11-02T06:30:00.000Z",
+                    "2026-11-03T06:30:00.000Z",
+                    "2026-11-04T06:30:00.000Z",
+                ],
+            ),
+            (
+                "0 2 * * *",
+                "America/New_York",
+                "2026-03-08T06:59:59.999Z",
+                [
+                    "2026-03-08T07:00:00.000Z",
+                    "2026-03-09T06:00:00.000Z",
+                    "2026-03-10T06:00:00.000Z",
+                ],
+            ),
+            (
+                "*/30 * * * * *",
+                "America/New_York",
+                "2026-11-01T05:59:59.999Z",
+                [
+                    "2026-11-01T07:00:00.000Z",
+                    "2026-11-01T07:00:30.000Z",
+                    "2026-11-01T07:01:00.000Z",
+                ],
+            ),
+            (
+                "30 1 * * *",
+                "America/New_York",
+                "2026-11-01T06:30:00.000Z",
+                [
+                    "2026-11-02T06:30:00.000Z",
+                    "2026-11-03T06:30:00.000Z",
+                    "2026-11-04T06:30:00.000Z",
+                ],
+            ),
+            (
+                "0 9 * * 1-5",
+                "America/New_York",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-15T14:00:00.000Z",
+                    "2026-01-16T14:00:00.000Z",
+                    "2026-01-19T14:00:00.000Z",
+                ],
+            ),
+            // DST in Berlin: 02:00-03:00 is skipped on 29 Mar 2026, repeated on 25 Oct 2026
+            (
+                "30 2 * * *",
+                "Europe/Berlin",
+                "2026-03-29T00:59:59.999Z",
+                [
+                    "2026-03-29T01:30:00.000Z",
+                    "2026-03-30T00:30:00.000Z",
+                    "2026-03-31T00:30:00.000Z",
+                ],
+            ),
+            (
+                "30 2 * * *",
+                "Europe/Berlin",
+                "2026-10-25T00:59:59.999Z",
+                [
+                    "2026-10-26T01:30:00.000Z",
+                    "2026-10-27T01:30:00.000Z",
+                    "2026-10-28T01:30:00.000Z",
+                ],
+            ),
+            (
+                "0 2 * * *",
+                "Europe/Berlin",
+                "2026-03-29T00:59:59.999Z",
+                [
+                    "2026-03-29T01:00:00.000Z",
+                    "2026-03-30T00:00:00.000Z",
+                    "2026-03-31T00:00:00.000Z",
+                ],
+            ),
+            (
+                "0 2 * * *",
+                "Europe/Berlin",
+                "2026-10-25T00:59:59.999Z",
+                [
+                    "2026-10-26T01:00:00.000Z",
+                    "2026-10-27T01:00:00.000Z",
+                    "2026-10-28T01:00:00.000Z",
+                ],
+            ),
+            (
+                "0 3 * * *",
+                "Europe/Berlin",
+                "2026-10-25T00:59:59.999Z",
+                [
+                    "2026-10-25T02:00:00.000Z",
+                    "2026-10-26T02:00:00.000Z",
+                    "2026-10-27T02:00:00.000Z",
+                ],
+            ),
+            (
+                "15 */6 * * *",
+                "Europe/Berlin",
+                "2026-03-29T00:59:59.999Z",
+                [
+                    "2026-03-29T04:15:00.000Z",
+                    "2026-03-29T10:15:00.000Z",
+                    "2026-03-29T16:15:00.000Z",
+                ],
+            ),
+            (
+                "0 9 * * 7",
+                "Europe/Berlin",
+                "2026-07-01T12:34:56.789Z",
+                [
+                    "2026-07-05T07:00:00.000Z",
+                    "2026-07-12T07:00:00.000Z",
+                    "2026-07-19T07:00:00.000Z",
+                ],
+            ),
+            // L, W and #
+            (
+                "0 9 L * *",
+                "UTC",
+                "2027-02-28T10:00:00.000Z",
+                [
+                    "2027-03-31T09:00:00.000Z",
+                    "2027-04-30T09:00:00.000Z",
+                    "2027-05-31T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9 LW * *",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-30T09:00:00.000Z",
+                    "2026-02-27T09:00:00.000Z",
+                    "2026-03-31T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9 15W * *",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-15T09:00:00.000Z",
+                    "2026-02-16T09:00:00.000Z",
+                    "2026-03-16T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9 1W * *",
+                "UTC",
+                "2027-02-28T10:00:00.000Z",
+                [
+                    "2027-03-01T09:00:00.000Z",
+                    "2027-04-01T09:00:00.000Z",
+                    "2027-05-03T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9 31W * *",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-30T09:00:00.000Z",
+                    "2026-03-31T09:00:00.000Z",
+                    "2026-05-29T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9 * * 5L",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-30T09:00:00.000Z",
+                    "2026-02-27T09:00:00.000Z",
+                    "2026-03-27T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9 * * 5#2",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-02-13T09:00:00.000Z",
+                    "2026-03-13T09:00:00.000Z",
+                    "2026-04-10T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9 * * 5#L",
+                "UTC",
+                "2026-12-31T23:59:59.999Z",
+                [
+                    "2027-01-29T09:00:00.000Z",
+                    "2027-02-26T09:00:00.000Z",
+                    "2027-03-26T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9 * * 1#1",
+                "UTC",
+                "2026-07-01T12:34:56.789Z",
+                [
+                    "2026-07-06T09:00:00.000Z",
+                    "2026-08-03T09:00:00.000Z",
+                    "2026-09-07T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9 * * 1L-3",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-19T09:00:00.000Z",
+                    "2026-01-20T09:00:00.000Z",
+                    "2026-01-21T09:00:00.000Z",
+                ],
+            ),
+            // Day of month OR day of week, unless + makes it AND
+            (
+                "0 9 1 * 1",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-19T09:00:00.000Z",
+                    "2026-01-26T09:00:00.000Z",
+                    "2026-02-01T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0 0 13 * 5",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-16T00:00:00.000Z",
+                    "2026-01-23T00:00:00.000Z",
+                    "2026-01-30T00:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9 L * 1",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-19T09:00:00.000Z",
+                    "2026-01-26T09:00:00.000Z",
+                    "2026-01-31T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9 1 * +1",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-06-01T09:00:00.000Z",
+                    "2027-02-01T09:00:00.000Z",
+                    "2027-03-01T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9 * * +1",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-19T09:00:00.000Z",
+                    "2026-01-26T09:00:00.000Z",
+                    "2026-02-02T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9 15 * ?",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-15T09:00:00.000Z",
+                    "2026-01-16T09:00:00.000Z",
+                    "2026-01-17T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9 ? * *",
+                "UTC",
+                "2026-07-01T12:34:56.789Z",
+                [
+                    "2026-07-02T09:00:00.000Z",
+                    "2026-07-03T09:00:00.000Z",
+                    "2026-07-04T09:00:00.000Z",
+                ],
+            ),
+            // Sunday as 0 and 7, names, steps, lists and rare dates
+            (
+                "0 9 * * 0",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-18T09:00:00.000Z",
+                    "2026-01-25T09:00:00.000Z",
+                    "2026-02-01T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9 * * fri-sun",
+                "UTC",
+                "2026-07-01T12:34:56.789Z",
+                [
+                    "2026-07-03T09:00:00.000Z",
+                    "2026-07-04T09:00:00.000Z",
+                    "2026-07-05T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0,30 8 * * 1,3,5",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-16T08:00:00.000Z",
+                    "2026-01-16T08:30:00.000Z",
+                    "2026-01-19T08:00:00.000Z",
+                ],
+            ),
+            (
+                "*/5 9-17 * * *",
+                "UTC",
+                "2026-07-01T12:34:56.789Z",
+                [
+                    "2026-07-01T12:35:00.000Z",
+                    "2026-07-01T12:40:00.000Z",
+                    "2026-07-01T12:45:00.000Z",
+                ],
+            ),
+            (
+                "*/60 * * * *",
+                "UTC",
+                "2026-07-01T12:34:56.789Z",
+                [
+                    "2026-07-01T13:00:00.000Z",
+                    "2026-07-01T14:00:00.000Z",
+                    "2026-07-01T15:00:00.000Z",
+                ],
+            ),
+            (
+                "0 0 */3 * *",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-16T00:00:00.000Z",
+                    "2026-01-19T00:00:00.000Z",
+                    "2026-01-22T00:00:00.000Z",
+                ],
+            ),
+            (
+                "0 0 29 2 *",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2028-02-29T00:00:00.000Z",
+                    "2032-02-29T00:00:00.000Z",
+                    "2036-02-29T00:00:00.000Z",
+                ],
+            ),
+            (
+                "0 0 31 * *",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-31T00:00:00.000Z",
+                    "2026-03-31T00:00:00.000Z",
+                    "2026-05-31T00:00:00.000Z",
+                ],
+            ),
+            (
+                "0 9,17 * * *",
+                "UTC",
+                "2026-12-31T23:59:59.999Z",
+                [
+                    "2027-01-01T09:00:00.000Z",
+                    "2027-01-01T17:00:00.000Z",
+                    "2027-01-02T09:00:00.000Z",
+                ],
+            ),
+            // Six and seven fields, and nicknames
+            (
+                "*/30 * * * * *",
+                "UTC",
+                "2026-07-01T12:34:56.789Z",
+                [
+                    "2026-07-01T12:35:00.000Z",
+                    "2026-07-01T12:35:30.000Z",
+                    "2026-07-01T12:36:00.000Z",
+                ],
+            ),
+            (
+                "0 */20 * * * *",
+                "UTC",
+                "2026-07-01T12:34:56.789Z",
+                [
+                    "2026-07-01T12:40:00.000Z",
+                    "2026-07-01T13:00:00.000Z",
+                    "2026-07-01T13:20:00.000Z",
+                ],
+            ),
+            (
+                "0 0 9 * * *",
+                "UTC",
+                "2026-12-31T23:59:59.999Z",
+                [
+                    "2027-01-01T09:00:00.000Z",
+                    "2027-01-02T09:00:00.000Z",
+                    "2027-01-03T09:00:00.000Z",
+                ],
+            ),
+            (
+                "0 0 9 * * * 2027",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2027-01-01T09:00:00.000Z",
+                    "2027-01-02T09:00:00.000Z",
+                    "2027-01-03T09:00:00.000Z",
+                ],
+            ),
+            (
+                "@hourly",
+                "UTC",
+                "2026-07-01T12:34:56.789Z",
+                [
+                    "2026-07-01T13:00:00.000Z",
+                    "2026-07-01T14:00:00.000Z",
+                    "2026-07-01T15:00:00.000Z",
+                ],
+            ),
+            (
+                "@weekly",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-18T00:00:00.000Z",
+                    "2026-01-25T00:00:00.000Z",
+                    "2026-02-01T00:00:00.000Z",
+                ],
+            ),
+            (
+                "@monthly",
+                "UTC",
+                "2026-12-31T23:59:59.999Z",
+                [
+                    "2027-01-01T00:00:00.000Z",
+                    "2027-02-01T00:00:00.000Z",
+                    "2027-03-01T00:00:00.000Z",
+                ],
+            ),
+            (
+                "@yearly",
+                "UTC",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2027-01-01T00:00:00.000Z",
+                    "2028-01-01T00:00:00.000Z",
+                    "2029-01-01T00:00:00.000Z",
+                ],
+            ),
+            (
+                "@YEARLY",
+                "UTC",
+                "2027-02-28T10:00:00.000Z",
+                [
+                    "2028-01-01T00:00:00.000Z",
+                    "2029-01-01T00:00:00.000Z",
+                    "2030-01-01T00:00:00.000Z",
+                ],
+            ),
+            // A fixed offset
+            (
+                "0 9 * * *",
+                "+05:30",
+                "2026-01-15T00:00:00.000Z",
+                [
+                    "2026-01-15T03:30:00.000Z",
+                    "2026-01-16T03:30:00.000Z",
+                    "2026-01-17T03:30:00.000Z",
+                ],
+            ),
+            (
+                "30 * * * *",
+                "+05:30",
+                "2026-07-01T12:34:56.789Z",
+                [
+                    "2026-07-01T13:00:00.000Z",
+                    "2026-07-01T14:00:00.000Z",
+                    "2026-07-01T15:00:00.000Z",
+                ],
+            ),
+            (
+                "0 0 * * *",
+                "+05:30",
+                "2026-12-31T23:59:59.999Z",
+                [
+                    "2027-01-01T18:30:00.000Z",
+                    "2027-01-02T18:30:00.000Z",
+                    "2027-01-03T18:30:00.000Z",
+                ],
+            ),
+        ];
+        for (expression, zone, from, want) in rows {
             let trigger = Trigger::Cron {
-                expression: case["expr"].as_str().unwrap_or_default().to_owned(),
-                timezone: case["tz"].as_str().map(str::to_owned),
+                expression: (*expression).to_owned(),
+                timezone: Some((*zone).to_owned()),
             };
-            let mut cursor = case["from_ms"].as_i64();
-            let mut got = Vec::new();
-            for _ in 0..3 {
-                cursor = cursor.and_then(|from| next_fire_at(&trigger, from));
-                got.push(cursor);
-                if cursor.is_none() {
-                    break;
-                }
-            }
-            let want: Vec<Option<i64>> = case["next_ms"]
-                .as_array()
-                .expect("next")
-                .iter()
-                .map(Value::as_i64)
-                .collect();
-            if got != want {
-                wrong.push(format!(
-                    "{} {:?} {} {:?} != {:?}",
-                    case["expr"], case["tz"], case["label"], got, want
-                ));
+            let mut cursor = ms(from);
+            for next in want {
+                cursor = next_fire_at(&trigger, cursor)
+                    .unwrap_or_else(|| panic!("{expression} in {zone} from {from} stopped"));
+                assert_eq!(cursor, ms(next), "{expression} in {zone} from {from}");
             }
         }
-        assert!(
-            wrong.is_empty(),
-            "{} of {} differ, e.g.\n{}",
-            wrong.len(),
-            cases.len(),
-            wrong[..wrong.len().min(15)].join("\n")
-        );
+        // A year that has passed has no next fire.
+        let spent = Trigger::Cron {
+            expression: "0 0 9 * * * 2027".into(),
+            timezone: Some("UTC".into()),
+        };
+        assert_eq!(next_fire_at(&spent, ms("2028-01-01T00:00:00Z")), None);
     }
 
+    /// --tz input as Intl canonicalized or refused it in 0.2.1.
     #[test]
     fn zone_names_canonicalize_like_intl() {
-        let fixture = load("tz-names.json");
-        let cases = fixture["cases"].as_array().expect("cases");
-        let mut wrong = Vec::new();
-        for case in cases {
-            let input = case["input"].as_str().unwrap_or_default();
-            let got = require_timezone(input).ok();
-            let want = case["canonical"].as_str().map(str::to_owned);
-            if got != want {
-                wrong.push(format!("{input:?}: {got:?} != {want:?}"));
+        let rows: &[(&str, Option<&str>)] = &[
+            ("Australia/Sydney", Some("Australia/Sydney")),
+            ("australia/sydney", Some("Australia/Sydney")),
+            ("AUSTRALIA/SYDNEY", Some("Australia/Sydney")),
+            ("aUsTrAlIa/MeLbOuRnE", Some("Australia/Melbourne")),
+            ("america/new_york", Some("America/New_York")),
+            ("europe/berlin", Some("Europe/Berlin")),
+            ("UTC", Some("UTC")),
+            ("utc", Some("UTC")),
+            ("Etc/UTC", Some("Etc/UTC")),
+            ("etc/utc", Some("Etc/UTC")),
+            ("Etc/GMT", Some("Etc/GMT")),
+            ("GMT", Some("GMT")),
+            ("gmt", Some("GMT")),
+            ("Etc/GMT+5", Some("Etc/GMT+5")),
+            ("etc/gmt-10", Some("Etc/GMT-10")),
+            ("Z", None),
+            ("Zulu", Some("Zulu")),
+            ("Universal", Some("Universal")),
+            ("UCT", Some("UCT")),
+            ("US/Eastern", Some("US/Eastern")),
+            ("us/pacific", Some("US/Pacific")),
+            ("EST", Some("EST")),
+            ("EST5EDT", Some("EST5EDT")),
+            ("CET", Some("CET")),
+            ("Asia/Calcutta", Some("Asia/Calcutta")),
+            ("Asia/Kolkata", Some("Asia/Kolkata")),
+            ("Asia/Saigon", Some("Asia/Saigon")),
+            ("Asia/Ho_Chi_Minh", Some("Asia/Ho_Chi_Minh")),
+            ("Europe/Kiev", Some("Europe/Kiev")),
+            ("Europe/Kyiv", Some("Europe/Kyiv")),
+            ("America/Buenos_Aires", Some("America/Buenos_Aires")),
+            (
+                "America/Argentina/Buenos_Aires",
+                Some("America/Argentina/Buenos_Aires"),
+            ),
+            ("America/Indianapolis", Some("America/Indianapolis")),
+            (
+                "America/Indiana/Indianapolis",
+                Some("America/Indiana/Indianapolis"),
+            ),
+            ("Australia/ACT", Some("Australia/ACT")),
+            ("Australia/Canberra", Some("Australia/Canberra")),
+            ("Antarctica/South_Pole", Some("Antarctica/South_Pole")),
+            ("Africa/Asmera", Some("Africa/Asmera")),
+            ("Pacific/Auckland", Some("Pacific/Auckland")),
+            ("NZ", Some("NZ")),
+            ("+10:00", Some("+10:00")),
+            ("+1000", Some("+10:00")),
+            ("-05:00", Some("-05:00")),
+            ("Mars/Olympus", None),
+            ("Australia/Sydney ", None),
+            (" Australia/Sydney", None),
+            ("Australia//Sydney", None),
+            ("local", None),
+            ("", None),
+            ("+10", Some("+10:00")),
+            ("-00:00", Some("+00:00")),
+            ("+00:00", Some("+00:00")),
+            ("-00", Some("+00:00")),
+            ("+24:00", None),
+            ("+23:59", Some("+23:59")),
+            ("+10:60", None),
+            ("+1:00", None),
+            ("+10:0", None),
+            ("+10:00:00", None),
+            ("+100000", None),
+            ("\u{2212}10:00", None),
+            ("+10:30", Some("+10:30")),
+            ("-0530", Some("-05:30")),
+            ("utc+10", None),
+            ("UTC+10", None),
+            ("GMT+10", None),
+            ("Etc/GMT-14", Some("Etc/GMT-14")),
+            ("Etc/GMT+12", Some("Etc/GMT+12")),
+            ("Etc/GMT+13", None),
+            ("est5edt", Some("EST5EDT")),
+            ("SystemV/EST5", None),
+            ("America/Godthab", Some("America/Godthab")),
+            ("Pacific/Enderbury", Some("Pacific/Enderbury")),
+            ("Factory", None),
+            ("ROC", Some("ROC")),
+            ("PRC", Some("PRC")),
+            ("Etc/Unknown", None),
+            ("Canada/East-Saskatchewan", Some("Canada/East-Saskatchewan")),
+            ("US/Pacific-New", Some("US/Pacific-New")),
+            ("MST", Some("MST")),
+            ("HST", Some("HST")),
+            ("WET", Some("WET")),
+        ];
+        for (input, want) in rows {
+            match (require_timezone(input), want) {
+                (Ok(got), Some(want)) => assert_eq!(&got, want, "{input:?}"),
+                (Err(error), None) => {
+                    assert_eq!(error.code, "invalid_timezone", "{input:?}");
+                    assert_eq!(error.exit_code, 2, "{input:?}");
+                }
+                (got, want) => panic!("{input:?}: {got:?}, wanted {want:?}"),
             }
         }
-        assert!(
-            wrong.is_empty(),
-            "{} of {} differ:\n{}",
-            wrong.len(),
-            cases.len(),
-            wrong[..wrong.len().min(30)].join("\n")
-        );
     }
-}
 
-#[cfg(test)]
-mod error_fixtures {
-    use serde_json::Value;
-
-    use super::*;
-
-    /// Every expression croner refused, with the message invalid_cron
-    /// carries, and the odd ones it took.
+    /// Expressions croner refused in 0.2.1 with the message it gave, and
+    /// odd ones it took.
     #[test]
     fn invalid_cron_matches_croner() {
-        let path = format!(
-            "{}/tests/fixtures/cron-errors.json",
-            env!("CARGO_MANIFEST_DIR")
-        );
-        let fixture: Value =
-            serde_json::from_str(&std::fs::read_to_string(path).expect("fixture exists"))
-                .expect("fixture is JSON");
-        let cases = fixture["cases"].as_array().expect("cases");
-        let mut wrong = Vec::new();
-        for case in cases {
-            let expression = case["expr"].as_str().unwrap_or_default();
-            let got = parse_trigger(Some(expression), None, Some("UTC"));
-            let ok = match (&got, case["accepted"].as_bool()) {
-                (Ok(_), Some(true)) => true,
-                (Err(error), None) => {
-                    error.code == case["code"].as_str().unwrap_or_default()
-                        && error.message == case["message"].as_str().unwrap_or_default()
-                        && error.exit_code == 2
-                }
-                _ => false,
-            };
-            if !ok {
-                wrong.push(format!("{expression:?}: {got:?}"));
-            }
+        for (expression, reason) in [
+            (
+                "",
+                "CronPattern: invalid configuration format (''), exactly five, six, or seven space separated parts are required.",
+            ),
+            (
+                "not a cron",
+                "CronPattern: invalid configuration format ('not a cron'), exactly five, six, or seven space separated parts are required.",
+            ),
+            (
+                "* * * *",
+                "CronPattern: invalid configuration format ('* * * *'), exactly five, six, or seven space separated parts are required.",
+            ),
+            (
+                "@sometimes",
+                "CronPattern: invalid configuration format ('@sometimes'), exactly five, six, or seven space separated parts are required.",
+            ),
+            ("61 * * * *", "CronPattern: Invalid value for minute: 61"),
+            ("0 25 * * *", "CronPattern: Invalid value for hour: 25"),
+            ("0 9 32 * *", "CronPattern: Invalid value for day: 31"),
+            ("0 9 0 * *", "CronPattern: Invalid value for day: -1"),
+            ("0 9 * 13 *", "CronPattern: Invalid value for month: 12"),
+            ("0 9 * * 8", "CronPattern: Invalid value for dayOfWeek: 8"),
+            (
+                "0 9 * * MON#6",
+                "CronPattern: nth weekday out of range, should be 1-5 or L. Value: 6, Type: string",
+            ),
+            (
+                "0 9 32W * *",
+                "CronPattern: Invalid value for nearestWeekdays: 31",
+            ),
+            (
+                "*/0 * * * *",
+                "CronPattern: Syntax error, illegal stepping: 0",
+            ),
+            (
+                "5-1 * * * *",
+                "CronPattern: From value is larger than to value: '5-1'",
+            ),
+            (
+                "0 9 * * FOO",
+                "CronPattern: configuration entry 5 (FOO) contains illegal characters.",
+            ),
+            (
+                "0/10 * * * *",
+                "CronPattern: Syntax error, stepping with numeric prefix ('0/10') is not allowed. Use wildcard (*/step) or range (min-max/step) instead.",
+            ),
+            (
+                "0 9 15W-20 * *",
+                "CronPattern: Syntax error, W is not allowed in a range.",
+            ),
+            (
+                "@reboot",
+                "CronPattern: @reboot is not supported in this environment. This is an event-based trigger that requires system startup detection.",
+            ),
+            (
+                "0 0 0 1 1 * 10000",
+                "CronPattern: Invalid value for year: 10000 (supported range: 1-9999)",
+            ),
+            (
+                "1W * * * *",
+                "CronPattern: configuration entry 1 (1W) contains illegal characters.",
+            ),
+        ] {
+            let error = parse_trigger(Some(expression), None, Some("UTC")).unwrap_err();
+            assert_eq!(error.code, "invalid_cron", "{expression:?}");
+            assert_eq!(error.exit_code, 2, "{expression:?}");
+            assert_eq!(
+                error.message,
+                format!("Invalid cron expression \"{expression}\": {reason}")
+            );
         }
-        assert!(
-            wrong.is_empty(),
-            "{} of {} differ:\n{}",
-            wrong.len(),
-            cases.len(),
-            wrong.join("\n")
-        );
+        for expression in [
+            "1 2 3 4 5 6 7",
+            "0 9 ? * *",
+            "*/60 * * * *",
+            "0 9 * * 5#",
+            "0 9 * * 5#l",
+            "0 9 * * +1",
+            "@YEARLY",
+            "0 9 * jan-dec *",
+            "0 9 * * sun-sat",
+            "0\t9 * *\t*",
+            " 0 9 * * * ",
+        ] {
+            assert!(
+                parse_trigger(Some(expression), None, Some("UTC")).is_ok(),
+                "{expression:?}"
+            );
+        }
     }
 }

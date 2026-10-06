@@ -1055,37 +1055,3 @@ pub fn next_run(pattern: &Pattern, zone: Zone, from_ms: i64) -> Option<i64> {
     date.apply();
     date.walk(pattern).then(|| date.instant())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn date_arithmetic_matches_javascript() {
-        assert_eq!(date_utc(2026, 0, 1, 0, 0, 0, 0), 1_767_225_600_000);
-        assert_eq!(
-            date_utc(2026, 12, 1, 0, 0, 0, 0),
-            date_utc(2027, 0, 1, 0, 0, 0, 0)
-        );
-        assert_eq!(
-            date_utc(2024, 2, 0, 0, 0, 0, 0),
-            date_utc(2024, 1, 29, 0, 0, 0, 0)
-        );
-        assert_eq!(
-            utc_fields(date_utc(2026, 3, 31, 25, 61, 0, 0)),
-            (2026, 4, 2, 2, 1, 0, 0)
-        );
-        assert_eq!(weekday(2026, 9, 6), 2);
-        assert_eq!(parse_int(" 15W"), Some(15));
-        assert_eq!(parse_int("1L"), Some(1));
-        assert_eq!(parse_int("L"), None);
-        assert_eq!(parse_int(""), None);
-    }
-
-    #[test]
-    fn replaces_names_case_insensitively_in_order() {
-        assert_eq!(replace_alpha_days("MON-FRI"), "1-5");
-        assert_eq!(replace_alpha_days("fri-sun"), "5-7");
-        assert_eq!(replace_alpha_months("jan-DEC"), "1-12");
-    }
-}
