@@ -50,7 +50,9 @@ impl NamedZone {
         let passed = data::TIMES[range.clone()].partition_point(|&time| time <= utc);
         match passed {
             0 => i64::from(first),
-            passed => i64::from(data::OFFSETS[range.start + passed - 1]),
+            passed => {
+                i64::from(data::OFFSET_VALUES[usize::from(data::OFFSETS[range.start + passed - 1])])
+            }
         }
     }
 }

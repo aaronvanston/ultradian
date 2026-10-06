@@ -200,6 +200,18 @@ fn zones() {
             .collect::<Vec<_>>()
             .join(",")
     };
+    // A zone's offsets come from a short list (about 120 values), so each
+    // transition stores a one-byte index into it.
+    let mut distinct = offsets.clone();
+    distinct.sort_unstable();
+    distinct.dedup();
+    let indexes: Vec<i64> = offsets
+        .iter()
+        .map(|offset| {
+            let index = distinct.binary_search(offset).expect("listed");
+            i64::from(u8::try_from(index).expect("at most 256 distinct offsets"))
+        })
+        .collect();
     let rust = format!(
         "/// Every name, joined; ZONES holds where each ends.\n\
          pub const NAMES: &str = {joined:?};\n\
@@ -207,12 +219,16 @@ fn zones() {
          /// first transition, transition count), sorted by lowercase name.\n\
          pub static ZONES: [(u32, i32, u32, u32); {}] = [{zones}];\n\
          pub static TIMES: [i64; {}] = [{}];\n\
-         pub static OFFSETS: [i32; {}] = [{}];\n",
+         /// Each transition's offset, as an index into OFFSET_VALUES.\n\
+         pub static OFFSETS: [u8; {}] = [{}];\n\
+         pub static OFFSET_VALUES: [i32; {}] = [{}];\n",
         names.len(),
         times.len(),
         list(&times),
-        offsets.len(),
-        list(&offsets),
+        indexes.len(),
+        list(&indexes),
+        distinct.len(),
+        list(&distinct),
     );
     let out = std::path::PathBuf::from(std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
     std::fs::write(out.join("zones.rs"), rust).expect("OUT_DIR is writable");
