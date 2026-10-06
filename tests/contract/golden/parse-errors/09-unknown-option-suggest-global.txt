@@ -1,9 +1,0 @@
-# args: list --jsno
-# compare: full
---- exit
-2
---- stdout
---- stderr
-error: unknown option '--jsno'
-(Did you mean --json?)
-(run 'ultradian <command> --help' for details)

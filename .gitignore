@@ -1,5 +1,5 @@
-# Dependencies and build output
-node_modules/
+# Build output
+/target/
 dist/
 
 # Environment and credentials — never commit real values
@@ -7,9 +7,7 @@ dist/
 .env.*
 !.env.example
 
-# Test and tooling output
-coverage/
-*.tsbuildinfo
+# Logs
 *.log
 
 # Machine-local agent settings
@@ -17,6 +15,3 @@ coverage/
 
 # OS cruft
 .DS_Store
-
-# Rust build output
-/target/

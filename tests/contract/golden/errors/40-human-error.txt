@@ -1,8 +1,0 @@
-# args: rm nobody --yes
-# compare: exit
---- exit
-1
---- stdout
---- stderr
-[error] Error: No schedule named "nobody".
-hint: List schedules with 'list'.

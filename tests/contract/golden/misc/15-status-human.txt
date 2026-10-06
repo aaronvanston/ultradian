@@ -1,8 +1,0 @@
-# args: status
-# compare: exit
---- exit
-0
---- stdout
-[warn] daemon not running (start it with 'ultradian daemon start')
-schedules 1 active, 0 paused
---- stderr

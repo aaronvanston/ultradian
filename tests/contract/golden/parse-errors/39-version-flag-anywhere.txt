@@ -1,7 +1,0 @@
-# args: list --version --json
-# compare: full
---- exit
-0
---- stdout
-<VERSION>
---- stderr

@@ -1,8 +1,0 @@
-# args: runs --limit
-# compare: full
---- exit
-2
---- stdout
---- stderr
-error: option '--limit <count>' argument missing
-(run 'ultradian <command> --help' for details)

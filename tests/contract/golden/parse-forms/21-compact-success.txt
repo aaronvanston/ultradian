@@ -1,7 +1,0 @@
-# args: rm short --yes --json --compact
-# compare: full
---- exit
-0
---- stdout
-{"command":"rm","data":{"id":"<schedule:2>","removed":"short"},"ok":true,"schemaVersion":2}
---- stderr

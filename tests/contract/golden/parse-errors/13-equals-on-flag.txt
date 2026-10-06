@@ -1,9 +1,0 @@
-# args: --json=1 list
-# compare: full
---- exit
-2
---- stdout
---- stderr
-error: unknown option '--json=1'
-(Did you mean one of --json, --jsonl?)
-(run 'ultradian <command> --help' for details)

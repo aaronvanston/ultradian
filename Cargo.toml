@@ -7,9 +7,8 @@ description = "Gated schedules and workflows for invoking AI"
 license = "MIT"
 repository = "https://github.com/aaronvanston/ultradian"
 publish = false
-# legacy/ is the 0.2.x TypeScript build and tests/ holds fixtures; neither
-# belongs in a source package.
-exclude = ["legacy/", "docs/", ".github/"]
+# Docs and CI don't belong in a source package.
+exclude = ["docs/", ".github/"]
 
 [[bin]]
 name = "ultradian"

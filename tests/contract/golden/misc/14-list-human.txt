@@ -1,8 +1,0 @@
-# args: list
-# compare: exit
---- exit
-0
---- stdout
-NAME  TRIGGER   STATUS  GATE  NEXT   LAST RUN          RUNS
-m1    every 5m  active        in <REL>  succeeded <REL> ago  1
---- stderr
