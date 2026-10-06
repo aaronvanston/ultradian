@@ -11,26 +11,16 @@ use super::options::{self, Bound, Toggle};
 use super::{ArgValue, Context, Done, NAME};
 use crate::errors::{AppError, exit};
 use crate::output::{iso_ms, now_ms};
-use crate::store::{
-    DaemonInfo, NewSchedule, Run, Schedule, SchedulePatch, Store, is_pid_alive, resolve_home,
-    resolve_path,
-};
+use crate::store::{NewSchedule, Run, Schedule, SchedulePatch, Store, resolve_home, resolve_path};
 use crate::style::Ui;
 use crate::triggers::{
     Trigger, describe_trigger, format_seconds, next_fire_at, parse_catch_up, parse_duration,
     parse_trigger,
 };
 
-/// A heartbeat older than this means the daemon is gone.
-const HEARTBEAT_STALE_MS: i64 = 15_000;
+use crate::daemon::daemon_is_live;
 
-pub fn daemon_is_live(info: Option<&DaemonInfo>) -> bool {
-    info.is_some_and(|info| {
-        is_pid_alive(info.pid) && now_ms() - info.heartbeat_at < HEARTBEAT_STALE_MS
-    })
-}
-
-fn open_store() -> Result<Store, AppError> {
+pub(super) fn open_store() -> Result<Store, AppError> {
     Store::open(&resolve_home())
 }
 
@@ -124,7 +114,7 @@ fn schedule_record(schedule: &Schedule) -> ScheduleRecord {
 }
 
 /// "in 5m" or "3h ago", rounded to the largest whole unit.
-fn relative(ms: i64) -> String {
+pub(super) fn relative(ms: i64) -> String {
     let delta = ms - now_ms();
     let magnitude = delta.unsigned_abs() as f64;
     let (size, label) = [

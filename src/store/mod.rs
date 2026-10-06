@@ -216,11 +216,16 @@ pub fn machine_id() -> String {
     String::from_utf8_lossy(&buffer[..end]).into_owned()
 }
 
-/// Whether a process exists. EPERM still means it does.
+/// Whether a process exists. EPERM still means it does. Zero and negative
+/// numbers name process groups to kill(2), never one process, so they are
+/// never alive here.
 pub fn is_pid_alive(pid: i64) -> bool {
     let Ok(pid) = libc::pid_t::try_from(pid) else {
         return false;
     };
+    if pid <= 0 {
+        return false;
+    }
     // SAFETY: signal 0 only checks for the process.
     if unsafe { libc::kill(pid, 0) } == 0 {
         return true;

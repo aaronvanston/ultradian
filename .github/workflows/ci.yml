@@ -57,5 +57,5 @@ jobs:
       - run: cargo build
       # The scenarios the rewrite answers so far; the rest join as their
       # phases land.
-      - run: BIN="$PWD/target/debug/ultradian" tests/contract/run.sh version parse-errors parse-forms catalog arbor catch-up-zero
+      - run: BIN="$PWD/target/debug/ultradian" tests/contract/run.sh version parse-errors parse-forms catalog arbor catch-up-zero daemon service
       - run: RS_BIN=target/debug/ultradian tests/compat/run.sh

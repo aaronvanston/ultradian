@@ -724,3 +724,10 @@ fn a_fire_late_by_exactly_its_window_still_runs() {
         (vec!["wide".to_owned()], vec!["strict".to_owned()])
     );
 }
+
+#[test]
+fn group_ids_are_never_mistaken_for_live_processes() {
+    assert!(is_pid_alive(i64::from(std::process::id())));
+    assert!(!is_pid_alive(0));
+    assert!(!is_pid_alive(-1));
+}

@@ -4,6 +4,7 @@
 //! stderr.
 
 pub mod commander;
+mod daemon;
 mod options;
 mod schedules;
 mod system;
@@ -335,6 +336,13 @@ fn dispatch(path: &str, context: &Context) -> Result<Done, AppError> {
         "resume" => schedules::toggle(context, true),
         "rm" => schedules::rm(context),
         "prune" => schedules::prune(context),
+        "daemon start" => daemon::start(context),
+        "daemon stop" => daemon::stop(context),
+        "daemon run" => daemon::run(context),
+        "daemon install" => daemon::install(context),
+        "daemon restart" => daemon::restart(context),
+        "daemon uninstall" => daemon::uninstall(context),
+        "self install" => daemon::self_install(context),
         _ => Err(AppError::new(
             "not_implemented",
             format!("'{NAME} {path}' is not implemented in this build yet."),
