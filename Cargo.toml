@@ -34,7 +34,7 @@ serde_json = { version = "1", features = ["preserve_order"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 
 [profile.release]
-opt-level = "s"
+opt-level = "z"
 lto = "fat"
 codegen-units = 1
 panic = "abort"
