@@ -82,7 +82,7 @@ fn global_options() -> Vec<Opt> {
     ]
 }
 
-fn examples_text(examples: &[String], ui: &Ui) -> String {
+fn examples_text(examples: &[&str], ui: &Ui) -> String {
     if examples.is_empty() {
         return String::new();
     }
@@ -122,10 +122,9 @@ pub fn program(ui: &Ui) -> Cmd {
         help_command: false,
         hide_description: true,
     };
-    let catalog = catalog::catalog();
     for path in REGISTRATION_ORDER {
-        let tokens: Vec<String> = path.split(' ').map(str::to_owned).collect();
-        let Some(spec) = catalog.find(&tokens) else {
+        let tokens: Vec<&str> = path.split(' ').collect();
+        let Some(spec) = catalog::find(&tokens) else {
             continue;
         };
         let help_group = (spec.module == "system").then(|| "System commands:".to_owned());
@@ -137,7 +136,7 @@ pub fn program(ui: &Ui) -> Cmd {
                     |(_, text)| (*text).to_owned(),
                 );
                 parent.commands.push(Cmd {
-                    name: token.clone(),
+                    name: (*token).to_owned(),
                     aliases: Vec::new(),
                     summary: description,
                     before_help: None,
@@ -162,26 +161,30 @@ pub fn program(ui: &Ui) -> Cmd {
             .options
             .iter()
             .map(|option| {
-                let mut built = Opt::new(&option.flags, &option.description);
-                built.choices.clone_from(&option.choices);
-                built.default.clone_from(&option.default_value);
+                let mut built = Opt::new(option.flags, option.description);
+                built.choices = option
+                    .choices
+                    .map(|choices| choices.iter().map(|&choice| choice.to_owned()).collect());
+                built.default = option.default_value();
                 built
             })
             .collect();
         parent.commands.push(Cmd {
-            name: tokens.last().cloned().unwrap_or_default(),
-            aliases: spec.aliases.clone(),
-            summary: spec.summary.clone(),
-            before_help: spec.description.as_ref().map(|text| format!("\n{text}\n")),
-            after_help: Some(examples_text(&spec.examples, ui)),
+            name: tokens
+                .last()
+                .map_or_else(String::new, |&name| name.to_owned()),
+            aliases: spec.aliases.iter().map(|&alias| alias.to_owned()).collect(),
+            summary: spec.summary.to_owned(),
+            before_help: spec.description.map(|text| format!("\n{text}\n")),
+            after_help: Some(examples_text(spec.examples, ui)),
             arguments: spec
                 .arguments
                 .iter()
                 .map(|argument| Arg {
-                    name: argument.name.clone(),
+                    name: argument.name.to_owned(),
                     required: argument.required,
                     variadic: argument.variadic,
-                    description: Some(argument.description.clone().unwrap_or_default()),
+                    description: Some(argument.description.unwrap_or_default().to_owned()),
                 })
                 .collect(),
             options,
@@ -507,18 +510,18 @@ mod tests {
         );
         let ui = Ui::new(&preflight(&[]));
         let program = program(&ui);
-        for command in &catalog::catalog().commands {
+        for command in catalog::COMMANDS {
             let mut level = &program;
-            for token in &command.path {
+            for token in command.path {
                 level = level
                     .commands
                     .iter()
-                    .find(|candidate| &candidate.name == token)
+                    .find(|candidate| candidate.name == *token)
                     .unwrap_or_else(|| panic!("{} is missing", command.path.join(" ")));
             }
             assert!(level.has_action);
         }
-        assert_eq!(REGISTRATION_ORDER.len(), catalog::catalog().commands.len());
+        assert_eq!(REGISTRATION_ORDER.len(), catalog::COMMANDS.len());
         assert_eq!(
             Some(REGISTRATION_ORDER.len()),
             catalog::json()["commands"].as_array().map(Vec::len)

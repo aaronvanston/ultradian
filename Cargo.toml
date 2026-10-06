@@ -28,6 +28,11 @@ serde = { version = "1", features = ["derive"] }
 # order 0.2.1 wrote them, which isn't alphabetical.
 serde_json = { version = "1", features = ["preserve_order"] }
 
+[build-dependencies]
+# build.rs turns src/catalog.json into Rust statics; preserve_order keeps
+# the embedded JSON's keys in catalog.json's order.
+serde_json = { version = "1", features = ["preserve_order"] }
+
 [profile.release]
 opt-level = "s"
 lto = "fat"

@@ -39,33 +39,89 @@ fn link_args() {
     }
 }
 
-/// Writes src/catalog.json to OUT_DIR without the whitespace between
-/// tokens. The binary parses the catalog on every launch to build its
-/// parser, and indentation was more than half of the text to scan.
-fn minify_catalog() {
+/// Writes src/catalog.json into OUT_DIR twice: as JSON without the
+/// whitespace between tokens, which `schema` and `describe` print, and as
+/// Rust statics the command-line parser is built from, so no launch has to
+/// parse JSON just to read argv.
+fn catalog() {
     println!("cargo:rerun-if-changed=src/catalog.json");
     let text = std::fs::read_to_string("src/catalog.json").expect("src/catalog.json is readable");
-    let mut out = String::with_capacity(text.len());
-    let (mut in_string, mut escaped) = (false, false);
-    for character in text.chars() {
-        if in_string {
-            in_string = escaped || character != '"';
-            escaped = !escaped && character == '\\';
-        } else if character == '"' {
-            in_string = true;
-        } else if character.is_ascii_whitespace() {
-            continue;
-        }
-        out.push(character);
+    let catalog: serde_json::Value =
+        serde_json::from_str(&text).expect("src/catalog.json is valid JSON");
+    let out = std::path::PathBuf::from(std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
+    std::fs::write(out.join("catalog.json"), catalog.to_string()).expect("OUT_DIR is writable");
+    std::fs::write(out.join("catalog.rs"), catalog_statics(&catalog)).expect("OUT_DIR is writable");
+}
+
+/// The catalog's commands as a `&[CatalogCommand]` expression.
+fn catalog_statics(catalog: &serde_json::Value) -> String {
+    use serde_json::Value;
+    let text = |value: &Value| format!("{:?}", value.as_str().expect("a string"));
+    let optional = |value: Option<&Value>| match value.and_then(Value::as_str) {
+        Some(value) => format!("Some({value:?})"),
+        None => "None".to_owned(),
+    };
+    let list = |value: &Value| {
+        let items: Vec<String> = value.as_array().expect("a list").iter().map(text).collect();
+        format!("&[{}]", items.join(", "))
+    };
+    let flag = |value: &Value, key: &str| value[key].as_bool().expect("a boolean");
+    let mut out = String::from("&[\n");
+    for command in catalog["commands"].as_array().expect("commands") {
+        let arguments: Vec<String> = command["arguments"]
+            .as_array()
+            .expect("arguments")
+            .iter()
+            .map(|argument| {
+                format!(
+                    "CatalogArgument {{ name: {}, required: {}, variadic: {}, description: {} }}",
+                    text(&argument["name"]),
+                    flag(argument, "required"),
+                    flag(argument, "variadic"),
+                    optional(argument.get("description")),
+                )
+            })
+            .collect();
+        let options: Vec<String> = command["options"]
+            .as_array()
+            .expect("options")
+            .iter()
+            .map(|option| {
+                let choices = match option.get("choices") {
+                    Some(choices) if !choices.is_null() => format!("Some({})", list(choices)),
+                    _ => "None".to_owned(),
+                };
+                // Kept as JSON text: a default may be any JSON value.
+                let default = match option.get("defaultValue") {
+                    Some(value) if !value.is_null() => format!("Some({:?})", value.to_string()),
+                    _ => "None".to_owned(),
+                };
+                format!(
+                    "CatalogOption {{ flags: {}, description: {}, choices: {choices}, default_json: {default} }}",
+                    text(&option["flags"]),
+                    text(&option["description"]),
+                )
+            })
+            .collect();
+        out.push_str(&format!(
+            "CatalogCommand {{ path: {}, aliases: {}, module: {}, summary: {}, description: {}, examples: {}, arguments: &[{}], options: &[{}] }},\n",
+            list(&command["path"]),
+            list(&command["aliases"]),
+            text(&command["module"]),
+            text(&command["summary"]),
+            optional(command.get("description")),
+            list(&command["examples"]),
+            arguments.join(", "),
+            options.join(", "),
+        ));
     }
-    let path = std::path::Path::new(&std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"))
-        .join("catalog.json");
-    std::fs::write(path, out).expect("OUT_DIR is writable");
+    out.push(']');
+    out
 }
 
 fn main() {
     link_args();
-    minify_catalog();
+    catalog();
     println!("cargo:rerun-if-env-changed=ULTRADIAN_COMMIT");
     for path in ["HEAD", "logs/HEAD"] {
         if let Some(file) = git(&["rev-parse", "--git-path", path]) {
