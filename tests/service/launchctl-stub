@@ -1,0 +1,26 @@
+#!/bin/sh
+# A stand-in for launchctl, put first on PATH by the service tests. It never
+# runs the real one. Each call is appended to $STUB_LOG (the uid and
+# $STUB_HOME masked); subcommands listed in $STUB_FAIL fail; otherwise it
+# plays launchd inside the test's throwaway home: bootstrap starts
+# `$STUB_DAEMON daemon run`, bootout stops it through `daemon stop`, and
+# kickstart does both. Pids it starts go to $STUB_PIDS so the test can stop
+# them.
+uid="$(id -u)"
+printf 'launchctl' >>"$STUB_LOG"
+for argument in "$@"; do
+  printf ' %s' "$(printf '%s' "$argument" | sed "s#gui/$uid#gui/<UID>#; s#$STUB_HOME#<HOME>#")" >>"$STUB_LOG"
+done
+printf '\n' >>"$STUB_LOG"
+case ",$STUB_FAIL," in *",$1,"*) echo "stub: $1 refused" >&2; exit 5 ;; esac
+stop_daemon() { "$STUB_DAEMON" daemon stop --json >/dev/null 2>&1 || true; }
+start_daemon() {
+  "$STUB_DAEMON" daemon run >>"$ULTRADIAN_HOME/daemon.out.log" 2>&1 </dev/null &
+  echo $! >>"$STUB_PIDS"
+}
+case "$1" in
+  bootstrap) start_daemon ;;
+  bootout) stop_daemon ;;
+  kickstart) stop_daemon; start_daemon ;;
+esac
+exit 0

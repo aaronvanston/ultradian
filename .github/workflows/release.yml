@@ -1,7 +1,10 @@
 name: Release
 
-# A tag such as v0.2.0 that matches package.json's version publishes that
-# version: the four archives and SHA256SUMS from scripts/build-release.ts.
+# A tag such as v0.3.0 that matches Cargo.toml's version publishes that
+# version: four archives, each holding one root-owned file named
+# `ultradian`, and SHA256SUMS with `<hex>  <name>` lines. Install scripts
+# rely on that layout, so it doesn't change between releases. CI has
+# already run the tests on the tagged commit.
 
 on:
   push:
@@ -16,68 +19,135 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build
-    runs-on: macos-latest
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
     steps:
       - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
-      - run: bun install --frozen-lockfile
-      - name: Tag matches the package version
+      - id: read
+        name: Read Cargo.toml's version
         run: |
-          version="$(bun -e 'console.log(require("./package.json").version)')"
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "Tag $GITHUB_REF_NAME doesn't match package.json version $version" >&2
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)"
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "Cargo.toml version $version"
+      - name: Tag matches the crate version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          if [ "v${{ steps.read.outputs.version }}" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME doesn't match Cargo.toml version ${{ steps.read.outputs.version }}" >&2
             exit 1
           fi
-      - run: bun run ci
-      - run: bun run build:release
-      - uses: actions/upload-artifact@v7
-        with:
-          name: release
-          path: dist/release/
-          if-no-files-found: error
 
-  check-linux:
-    name: Check the Linux builds start
-    needs: build
+  build:
+    name: Build ${{ matrix.name }}
+    needs: version
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-latest
-            target: linux-x64
-          - runner: ubuntu-24.04-arm
-            target: linux-arm64
+          - name: darwin-arm64
+            target: aarch64-apple-darwin
+            runner: macos-latest
+          - name: darwin-x64
+            target: x86_64-apple-darwin
+            runner: macos-latest
+          - name: linux-arm64
+            target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+          - name: linux-x64
+            target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
     runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/checkout@v7
+      - name: Add the target
+        run: rustup target add ${{ matrix.target }}
+      - name: Install musl tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Install Rosetta for the x64 probe
+        if: matrix.name == 'darwin-x64'
+        run: /usr/sbin/softwareupdate --install-rosetta --agree-to-license || true
+      - name: Build
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            # Static musl, so the binary needs no particular glibc; SQLite is
+            # compiled in by rusqlite's bundled build, with musl's compiler.
+            target_env="$(echo "${{ matrix.target }}" | tr '-' '_')"
+            export "CC_$target_env=musl-gcc"
+          fi
+          cargo build --release --locked --target ${{ matrix.target }}
+      - name: Probe the binary natively
+        run: |
+          binary="target/${{ matrix.target }}/release/ultradian"
+          if [ "${{ matrix.name }}" = darwin-x64 ]; then
+            probe() { arch -x86_64 "$binary" "$@"; }
+          else
+            probe() { "$binary" "$@"; }
+          fi
+          output="$(probe version --json)"
+          echo "$output"
+          echo "$output" | grep -q "\"version\": \"$VERSION\"" || { echo "the binary doesn't report $VERSION" >&2; exit 1; }
+          file "$binary"
+          if [ "$RUNNER_OS" = Linux ]; then
+            file "$binary" | grep -Eq "statically linked|static-pie linked" || { echo "not static" >&2; exit 1; }
+          fi
+      - name: Package
+        run: |
+          stage="$RUNNER_TEMP/stage"
+          mkdir -p "$stage" dist
+          cp "target/${{ matrix.target }}/release/ultradian" "$stage/ultradian"
+          chmod 755 "$stage/ultradian"
+          archive="ultradian-$VERSION-${{ matrix.name }}.tar.gz"
+          # No owner names or macOS metadata in the archive; it holds one
+          # file, owned by root.
+          if [ "$RUNNER_OS" = macOS ]; then
+            COPYFILE_DISABLE=1 tar -czf "dist/$archive" -C "$stage" --no-mac-metadata \
+              --uid 0 --gid 0 --uname root --gname root ultradian
+          else
+            tar -czf "dist/$archive" -C "$stage" --owner=0 --group=0 --numeric-owner ultradian
+          fi
+          tar -tvzf "dist/$archive"
+          [ "$(tar -tzf "dist/$archive")" = ultradian ] || { echo "the archive must hold one file named ultradian" >&2; exit 1; }
+          ls -l "dist/$archive" "$stage/ultradian"
+      - uses: actions/upload-artifact@v7
         with:
-          name: release
-          path: release
-      - run: |
-          cd release
-          archive="$(ls ultradian-*-${{ matrix.target }}.tar.gz)"
-          grep " $archive\$" SHA256SUMS | sha256sum -c -
-          tar -xzf "$archive"
-          ./ultradian version --json
+          name: archive-${{ matrix.name }}
+          path: dist/
+          if-no-files-found: error
 
   publish:
     name: Publish
-    needs: [build, check-linux]
+    needs: [version, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: release
+          pattern: archive-*
           path: release
+          merge-multiple: true
+      - name: Write SHA256SUMS
+        run: |
+          cd release
+          : >SHA256SUMS
+          for name in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
+            sha256sum "ultradian-$VERSION-$name.tar.gz" >>SHA256SUMS
+          done
+          cat SHA256SUMS
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" release/* \
+          prerelease=""
+          case "$VERSION" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" release/* $prerelease \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
             --notes "Builds for macOS and Linux on arm64 and x64. Check an archive against SHA256SUMS, extract it, and run './ultradian self install'."

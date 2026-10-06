@@ -1,0 +1,25 @@
+#!/bin/sh
+# A stand-in for systemctl, put first on PATH by the service tests. It never
+# runs the real one. Each call is appended to $STUB_LOG ($STUB_HOME
+# masked); subcommands listed in $STUB_FAIL fail; otherwise it plays the
+# systemd user manager inside the test's throwaway home: `enable --now`
+# starts `$STUB_DAEMON daemon run`, `disable --now` stops it through
+# `daemon stop`, and `restart` does both. Pids it starts go to $STUB_PIDS.
+printf 'systemctl' >>"$STUB_LOG"
+for argument in "$@"; do
+  printf ' %s' "$(printf '%s' "$argument" | sed "s#$STUB_HOME#<HOME>#")" >>"$STUB_LOG"
+done
+printf '\n' >>"$STUB_LOG"
+[ "$1" = "--user" ] && shift
+case ",$STUB_FAIL," in *",$1,"*) echo "stub: $1 refused" >&2; exit 5 ;; esac
+stop_daemon() { "$STUB_DAEMON" daemon stop --json >/dev/null 2>&1 || true; }
+start_daemon() {
+  "$STUB_DAEMON" daemon run >>"$ULTRADIAN_HOME/daemon.out.log" 2>&1 </dev/null &
+  echo $! >>"$STUB_PIDS"
+}
+case "$1" in
+  enable) start_daemon ;;
+  disable) stop_daemon ;;
+  restart) stop_daemon; start_daemon ;;
+esac
+exit 0

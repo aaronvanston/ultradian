@@ -114,7 +114,7 @@ The record is the integration surface. Anything that wants to observe Ultradian 
 `ultradian` and the short alias `udian` are the same program. Each release has a build for macOS and Linux on arm64 and x64, with a `SHA256SUMS` file to check them against.
 
 ```bash
-version=0.2.1
+version=0.3.0
 target=darwin-arm64   # or darwin-x64, linux-arm64, linux-x64
 curl -fLO "https://github.com/aaronvanston/ultradian/releases/download/v$version/ultradian-$version-$target.tar.gz"
 curl -fLO "https://github.com/aaronvanston/ultradian/releases/download/v$version/SHA256SUMS"
@@ -131,13 +131,12 @@ udian daemon install
 
 The service gets your login shell's `PATH`, so actions such as `claude` or `codex` are found; pass `--path` to set it yourself, or `--dry-run` to see the service file first. On Linux, run `loginctl enable-linger "$USER"` once so the service outlives your last login, SSH included. Upgrading is the same `self install` from a newer build, then `udian daemon restart`.
 
-To run from source instead, with [Bun](https://bun.sh/):
+To build from source instead, with [Rust](https://rustup.rs/):
 
 ```bash
 git clone https://github.com/aaronvanston/ultradian.git
 cd ultradian
-bun install
-bun link
+cargo install --path .
 ```
 
 ## Set up
@@ -149,7 +148,7 @@ Every run's output is kept in its own log, one file per run partitioned by day (
 Configuration follows two rules:
 
 - All environment variables use the `ULTRADIAN_` prefix.
-- A local `.env` file works during development. Compiled binaries deliberately do not auto-load `.env`, so production configuration stays explicit.
+- Nothing is read from a `.env` file, so configuration stays explicit.
 
 ## Use it
 
@@ -205,17 +204,17 @@ ultradian completion zsh       # shell completions
 ultradian doctor               # environment and configuration checks
 ```
 
-The generated command reference lives in [`docs/commands.md`](docs/commands.md).
+The command reference lives in [`docs/commands.md`](docs/commands.md).
 
 ## Development
 
 ```bash
-bun run ci      # docs, lint, typecheck, tests, build
-bun run dev     # run from source
-bun test        # tests only
+cargo test                                   # unit tests and the command-line tests
+cargo clippy --all-targets -- -D warnings    # lint
+cargo run -- list                            # run from source
 ```
 
-Architecture notes are in [`docs/architecture.md`](docs/architecture.md) and the extension guide in [`docs/extending.md`](docs/extending.md). Agents working in this repository should read [`AGENTS.md`](AGENTS.md).
+Architecture notes are in [`docs/architecture.md`](docs/architecture.md). Agents working in this repository should read [`AGENTS.md`](AGENTS.md).
 
 ## License
 

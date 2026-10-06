@@ -1,0 +1,11 @@
+#!/bin/sh
+# A stand-in for loginctl: records the call (the user name masked) and
+# answers `show-user <user> --property=Linger --value` with $STUB_LINGER
+# (yes or no), or fails when it is "fail".
+printf 'loginctl' >>"$STUB_LOG"
+for argument in "$@"; do
+  printf ' %s' "$(printf '%s' "$argument" | sed "s#^$(id -un)\$#<USER>#")" >>"$STUB_LOG"
+done
+printf '\n' >>"$STUB_LOG"
+[ "${STUB_LINGER:-}" = fail ] && exit 1
+echo "${STUB_LINGER:-no}"
