@@ -13,8 +13,6 @@ const CATALOG_JSON: &str = include_str!("catalog.json");
 #[derive(Debug, Deserialize)]
 pub struct Catalog {
     pub commands: Vec<CatalogCommand>,
-    #[serde(rename = "schemaVersion")]
-    pub schema_version: i64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -25,7 +23,6 @@ pub struct CatalogCommand {
     pub summary: String,
     pub description: Option<String>,
     pub examples: Vec<String>,
-    pub kind: String,
     pub arguments: Vec<CatalogArgument>,
     pub options: Vec<CatalogOption>,
 }
@@ -74,7 +71,7 @@ mod tests {
     #[test]
     fn the_embedded_catalog_parses() {
         let catalog = catalog();
-        assert_eq!(catalog.schema_version, crate::output::SCHEMA_VERSION);
+        assert_eq!(json()["schemaVersion"], crate::output::SCHEMA_VERSION);
         assert_eq!(
             catalog.commands.len(),
             json()["commands"].as_array().map_or(0, Vec::len)

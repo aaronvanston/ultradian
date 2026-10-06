@@ -57,5 +57,10 @@ jobs:
       - run: cargo build
       # The scenarios the rewrite answers so far; the rest join as their
       # phases land.
-      - run: BIN="$PWD/target/debug/ultradian" tests/contract/run.sh version parse-errors parse-forms catalog arbor catch-up-zero daemon service
+      - run: BIN="$PWD/target/debug/ultradian" tests/contract/run.sh
       - run: RS_BIN=target/debug/ultradian tests/compat/run.sh
+      # launchd only; both scripts skip themselves on Linux.
+      - run: bun run build
+        working-directory: legacy
+      - run: TS_BIN=legacy/dist/ultradian RS_BIN=target/debug/ultradian tests/service/launchctl-calls.sh
+      - run: TS_BIN=legacy/dist/ultradian RS_BIN=target/debug/ultradian tests/service/upgrade.sh

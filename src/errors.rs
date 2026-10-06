@@ -9,6 +9,8 @@ pub mod exit {
     pub const ERROR: i32 = 1;
     pub const USAGE: i32 = 2;
     pub const TEMPFAIL: i32 = 75;
+    // 0.2.1 defined it too, and nothing used it there either.
+    #[allow(dead_code)]
     pub const NOPERM: i32 = 77;
     pub const CONFIG: i32 = 78;
 }
@@ -63,5 +65,3 @@ impl std::fmt::Display for AppError {
 }
 
 impl std::error::Error for AppError {}
-
-pub type Result<T> = std::result::Result<T, AppError>;

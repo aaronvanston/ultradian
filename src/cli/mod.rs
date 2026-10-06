@@ -5,6 +5,7 @@
 
 pub mod commander;
 mod daemon;
+mod doctor;
 mod options;
 mod schedules;
 mod system;
@@ -288,7 +289,6 @@ fn normalize(values: &HashMap<String, OptValue>) -> Result<Globals, AppError> {
 
 /// Everything a command gets to run with.
 pub struct Context {
-    pub globals: Globals,
     /// Prompts are allowed: human mode, not --non-interactive, and both
     /// stdin and stderr are terminals.
     pub interactive: bool,
@@ -323,6 +323,8 @@ fn dispatch(path: &str, context: &Context) -> Result<Done, AppError> {
         "version" => Ok(version::run(context)),
         "schema" => Ok(system::schema()),
         "describe" => system::describe(context),
+        "doctor" => doctor::doctor(context),
+        "completion" => doctor::completion(context),
         "add" => schedules::add(context),
         "once" => schedules::once(context),
         "list" => schedules::list(context),
@@ -453,7 +455,6 @@ pub fn run(argv: &[String], io: &mut dyn Io) -> i32 {
             && std::io::stderr().is_terminal()
     };
     let context = Context {
-        globals,
         interactive,
         cwd: std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/")),
         ui: Ui::new(&globals),

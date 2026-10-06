@@ -1,9 +1,5 @@
 //! ultradian: gated schedules and workflows for invoking AI.
 
-// The rewrite lands in phases: ids, the remaining exit codes and other
-// shared pieces are in place before the commands that use them. Remove
-// this once every command is ported.
-#![allow(dead_code)]
 // Errors carry their whole envelope (code, message, hint, details) and are
 // only built on the way out, so their size never costs anything.
 #![allow(clippy::result_large_err)]
