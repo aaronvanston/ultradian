@@ -39,8 +39,33 @@ fn link_args() {
     }
 }
 
+/// Writes src/catalog.json to OUT_DIR without the whitespace between
+/// tokens. The binary parses the catalog on every launch to build its
+/// parser, and indentation was more than half of the text to scan.
+fn minify_catalog() {
+    println!("cargo:rerun-if-changed=src/catalog.json");
+    let text = std::fs::read_to_string("src/catalog.json").expect("src/catalog.json is readable");
+    let mut out = String::with_capacity(text.len());
+    let (mut in_string, mut escaped) = (false, false);
+    for character in text.chars() {
+        if in_string {
+            in_string = escaped || character != '"';
+            escaped = !escaped && character == '\\';
+        } else if character == '"' {
+            in_string = true;
+        } else if character.is_ascii_whitespace() {
+            continue;
+        }
+        out.push(character);
+    }
+    let path = std::path::Path::new(&std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"))
+        .join("catalog.json");
+    std::fs::write(path, out).expect("OUT_DIR is writable");
+}
+
 fn main() {
     link_args();
+    minify_catalog();
     println!("cargo:rerun-if-env-changed=ULTRADIAN_COMMIT");
     for path in ["HEAD", "logs/HEAD"] {
         if let Some(file) = git(&["rev-parse", "--git-path", path]) {

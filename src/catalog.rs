@@ -8,7 +8,8 @@ use std::sync::OnceLock;
 use serde::Deserialize;
 use serde_json::Value;
 
-const CATALOG_JSON: &str = include_str!("catalog.json");
+// catalog.json without its indentation; see minify_catalog in build.rs.
+const CATALOG_JSON: &str = include_str!(concat!(env!("OUT_DIR"), "/catalog.json"));
 
 #[derive(Debug, Deserialize)]
 pub struct Catalog {
