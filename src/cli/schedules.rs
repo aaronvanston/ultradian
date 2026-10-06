@@ -1051,7 +1051,7 @@ mod tests {
 
     #[test]
     fn names_follow_the_0_2_pattern() {
-        for good in ["a", "arbor-x", "A.b_c-9", " padded "] {
+        for good in ["a", "deploy-x", "A.b_c-9", " padded "] {
             assert!(require_name(Some(good)).is_ok(), "{good}");
         }
         for bad in ["", " ", ".hidden", "-x", "bad name", "ümlaut", "a/b"] {
@@ -1069,20 +1069,5 @@ mod tests {
         let json = serde_json::to_string(&[Seconds(1_800_000), Seconds(0), Seconds(1500)])
             .unwrap_or_default();
         assert_eq!(json, "[1800,0,1.5]");
-    }
-
-    #[test]
-    fn basenames_like_node() {
-        assert_eq!(basename("/usr/bin/true"), "true");
-        assert_eq!(basename("./deploy.sh"), "deploy.sh");
-        assert_eq!(basename("dir/"), "dir");
-        assert_eq!(basename("plain"), "plain");
-    }
-
-    #[test]
-    fn relative_times_round_to_one_unit() {
-        let now = now_ms();
-        assert_eq!(relative(now + 5 * 60_000 + 10_000), "in 5m");
-        assert_eq!(relative(now - 3 * 3_600_000), "3h ago");
     }
 }

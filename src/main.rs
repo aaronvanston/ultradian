@@ -22,6 +22,6 @@ fn main() {
         .skip(1)
         .map(|arg| arg.to_string_lossy().into_owned())
         .collect();
-    let code = cli::run(&argv, &mut cli::ProcessIo);
+    let code = cli::run(&argv);
     std::process::exit(code);
 }

@@ -63,19 +63,3 @@ impl Catalog {
         self.commands.iter().find(|command| command.path == path)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_embedded_catalog_parses() {
-        let catalog = catalog();
-        assert_eq!(json()["schemaVersion"], crate::output::SCHEMA_VERSION);
-        assert_eq!(
-            catalog.commands.len(),
-            json()["commands"].as_array().map_or(0, Vec::len)
-        );
-        assert!(catalog.find(&["daemon".into(), "install".into()]).is_some());
-    }
-}

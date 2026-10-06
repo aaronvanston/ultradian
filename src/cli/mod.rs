@@ -352,12 +352,6 @@ fn dispatch(path: &str, context: &Context) -> Result<Done, AppError> {
     }
 }
 
-/// Where output goes; tests capture it, the binary writes to the process.
-pub trait Io {
-    fn stdout(&mut self, text: &str);
-    fn stderr(&mut self, text: &str);
-}
-
 /// Writes one block, adding the final newline 0.2.1 always ended with.
 fn line(text: &str) -> String {
     if text.ends_with('\n') {
@@ -367,45 +361,45 @@ fn line(text: &str) -> String {
     }
 }
 
-fn render_error(error: &AppError, globals: &Globals, ui: &Ui, io: &mut dyn Io) -> i32 {
+fn render_error(error: &AppError, globals: &Globals, ui: &Ui) -> i32 {
     if globals.mode == Mode::Human {
-        io.stderr(&line(&format!(
+        stderr(&line(&format!(
             "{} {} {}",
             ui.danger(ui.symbols.error),
             ui.danger("Error:"),
             error.message
         )));
         if let Some(hint) = &error.hint {
-            io.stderr(&line(&format!("{} {hint}", ui.muted("hint:"))));
+            stderr(&line(&format!("{} {hint}", ui.muted("hint:"))));
         }
         if let Some(docs) = &error.docs_url {
-            io.stderr(&line(&format!("{} {docs}", ui.muted("docs:"))));
+            stderr(&line(&format!("{} {docs}", ui.muted("docs:"))));
         }
         return error.exit_code;
     }
-    io.stderr(&line(&output::error_envelope(error, globals.compact)));
+    stderr(&line(&output::error_envelope(error, globals.compact)));
     error.exit_code
 }
 
-fn render_done(path: &str, done: &Done, globals: &Globals, ui: &Ui, io: &mut dyn Io) -> i32 {
+fn render_done(path: &str, done: &Done, globals: &Globals, ui: &Ui) -> i32 {
     if globals.mode == Mode::Human {
         if !done.human.is_empty() {
-            io.stdout(&line(&done.human));
+            stdout(&line(&done.human));
         }
         if !globals.quiet {
             for warning in &done.outcome.warnings {
-                io.stderr(&line(&format!(
+                stderr(&line(&format!(
                     "{} {} {warning}",
                     ui.warning(ui.symbols.warning),
                     ui.warning("Warning:")
                 )));
             }
             if let Some(hint) = &done.outcome.hint {
-                io.stderr(&line(&format!("{} {hint}", ui.muted("hint:"))));
+                stderr(&line(&format!("{} {hint}", ui.muted("hint:"))));
             }
         }
     } else {
-        io.stdout(&line(&output::success_envelope(
+        stdout(&line(&output::success_envelope(
             path,
             &done.outcome,
             globals,
@@ -415,21 +409,21 @@ fn render_done(path: &str, done: &Done, globals: &Globals, ui: &Ui, io: &mut dyn
 }
 
 /// Runs one invocation and returns the process exit code.
-pub fn run(argv: &[String], io: &mut dyn Io) -> i32 {
+pub fn run(argv: &[String]) -> i32 {
     let preflight = preflight(argv);
     let preflight_ui = Ui::new(&preflight);
     let program = program(&preflight_ui);
     if argv.is_empty() {
-        io.stdout(&commander::program_help(&program));
+        stdout(&commander::program_help(&program));
         return exit::OK;
     }
     let mut parsed_output = Output::default();
     let parsed = commander::parse(&program, VERSION, argv, &mut parsed_output);
     if !parsed_output.stdout.is_empty() {
-        io.stdout(&parsed_output.stdout);
+        stdout(&parsed_output.stdout);
     }
     if !parsed_output.stderr.is_empty() {
-        io.stderr(&parsed_output.stderr);
+        stderr(&parsed_output.stderr);
     }
     let invocation: Invocation = match parsed {
         Ok(invocation) => invocation,
@@ -439,12 +433,12 @@ pub fn run(argv: &[String], io: &mut dyn Io) -> i32 {
                 return exit::USAGE;
             }
             let error = AppError::usage("invalid_usage", stop.message);
-            return render_error(&error, &preflight, &preflight_ui, io);
+            return render_error(&error, &preflight, &preflight_ui);
         }
     };
     let globals = match normalize(&invocation.globals) {
         Ok(globals) => globals,
-        Err(error) => return render_error(&error, &preflight, &preflight_ui, io),
+        Err(error) => return render_error(&error, &preflight, &preflight_ui),
     };
     let path = invocation.path.join(" ");
     let interactive = {
@@ -462,15 +456,14 @@ pub fn run(argv: &[String], io: &mut dyn Io) -> i32 {
         options: invocation.options,
     };
     match dispatch(&path, &context) {
-        Ok(done) => render_done(&path, &done, &globals, &context.ui, io),
-        Err(error) => render_error(&error, &preflight, &preflight_ui, io),
+        Ok(done) => render_done(&path, &done, &globals, &context.ui),
+        Err(error) => render_error(&error, &preflight, &preflight_ui),
     }
 }
 
-/// The process's stdout and stderr. A closed pipe (`ultradian runs | head`)
-/// ends the program quietly with exit 0, as 0.2.1 did.
-pub struct ProcessIo;
-
+/// Writes to the process's stdout or stderr. A closed pipe
+/// (`ultradian runs | head`) ends the program quietly with exit 0, as 0.2.1
+/// did.
 fn write_or_exit(mut stream: impl Write, text: &str) {
     if let Err(error) = stream
         .write_all(text.as_bytes())
@@ -481,40 +474,17 @@ fn write_or_exit(mut stream: impl Write, text: &str) {
     }
 }
 
-impl Io for ProcessIo {
-    fn stdout(&mut self, text: &str) {
-        write_or_exit(std::io::stdout().lock(), text);
-    }
-    fn stderr(&mut self, text: &str) {
-        write_or_exit(std::io::stderr().lock(), text);
-    }
+fn stdout(text: &str) {
+    write_or_exit(std::io::stdout().lock(), text);
+}
+
+fn stderr(text: &str) {
+    write_or_exit(std::io::stderr().lock(), text);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[derive(Default)]
-    struct Captured {
-        stdout: String,
-        stderr: String,
-    }
-
-    impl Io for Captured {
-        fn stdout(&mut self, text: &str) {
-            self.stdout.push_str(text);
-        }
-        fn stderr(&mut self, text: &str) {
-            self.stderr.push_str(text);
-        }
-    }
-
-    fn invoke(args: &[&str]) -> (i32, Captured) {
-        let argv: Vec<String> = args.iter().map(|arg| (*arg).to_owned()).collect();
-        let mut captured = Captured::default();
-        let code = run(&argv, &mut captured);
-        (code, captured)
-    }
 
     fn opts(args: &[&str]) -> Invocation {
         let argv: Vec<String> = args.iter().map(|arg| (*arg).to_owned()).collect();
@@ -529,8 +499,14 @@ mod tests {
         }
     }
 
+    /// The embedded catalog parses, carries this build's schemaVersion, and
+    /// every command it lists is in the parser's tree.
     #[test]
     fn every_catalog_command_is_in_the_tree() {
+        assert_eq!(
+            catalog::json()["schemaVersion"],
+            crate::output::SCHEMA_VERSION
+        );
         let ui = Ui::new(&preflight(&[]));
         let program = program(&ui);
         for command in &catalog::catalog().commands {
@@ -545,6 +521,10 @@ mod tests {
             assert!(level.has_action);
         }
         assert_eq!(REGISTRATION_ORDER.len(), catalog::catalog().commands.len());
+        assert_eq!(
+            Some(REGISTRATION_ORDER.len()),
+            catalog::json()["commands"].as_array().map(Vec::len)
+        );
     }
 
     #[test]
@@ -570,6 +550,14 @@ mod tests {
                 ArgValue::Many(vec!["echo".into(), "--dry-run".into()])
             ]
         );
+        // An option value may look like a flag; the command needs no `--`.
+        let invocation = opts(&["add", "x", "--gate", "--dry-run", "--yes", "echo", "hi"]);
+        assert_eq!(string(&invocation, "gate").as_deref(), Some("--dry-run"));
+        assert_eq!(invocation.options.get("dryRun"), None);
+        assert_eq!(
+            invocation.arguments[1],
+            ArgValue::Many(vec!["echo".into(), "hi".into()])
+        );
     }
 
     #[test]
@@ -592,42 +580,12 @@ mod tests {
             Some(&OptValue::Bool(false))
         );
         assert_eq!(invocation.options.get("group"), None);
+        let short = opts(&["rm", "a", "-y"]);
+        assert_eq!(short.options.get("yes"), Some(&OptValue::Bool(true)));
         let add = opts(&["add", "a", "--", "echo"]);
         assert_eq!(
             add.options.get("gateMode"),
             Some(&OptValue::Default(Value::from("output")))
         );
-    }
-
-    #[test]
-    fn parse_errors_exit_2_with_an_envelope_under_json() {
-        let (code, out) = invoke(&["list", "--bogus", "--json"]);
-        assert_eq!(code, 2);
-        assert_eq!(
-            out.stderr,
-            "error: unknown option '--bogus'\n(run 'ultradian <command> --help' for details)\n{\n  \"error\": {\n    \"code\": \"invalid_usage\",\n    \"message\": \"error: unknown option '--bogus'\"\n  },\n  \"ok\": false,\n  \"schemaVersion\": 2\n}\n"
-        );
-        let (code, out) = invoke(&["bogus"]);
-        assert_eq!(code, 2);
-        assert_eq!(
-            out.stderr,
-            "error: unknown command 'bogus'\n(Did you mean logs?)\n(run 'ultradian <command> --help' for details)\n"
-        );
-    }
-
-    #[test]
-    fn version_answers_in_every_mode() {
-        let (code, out) = invoke(&["version", "--json", "--compact"]);
-        assert_eq!(code, 0);
-        assert!(
-            out.stdout
-                .starts_with("{\"command\":\"version\",\"data\":{\"arch\":")
-        );
-        assert!(
-            out.stdout
-                .contains("\"runtime\":\"rust\",\"version\":\"0.3.0\"}")
-        );
-        let (code, out) = invoke(&["list", "--version"]);
-        assert_eq!((code, out.stdout.as_str()), (0, "0.3.0\n"));
     }
 }

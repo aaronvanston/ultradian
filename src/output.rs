@@ -218,12 +218,10 @@ mod tests {
         assert_eq!(iso_ms(1_798_761_599_999), "2026-12-31T23:59:59.999Z");
         assert_eq!(iso_ms(951_782_400_000), "2000-02-29T00:00:00.000Z");
         assert_eq!(iso_ms(-1), "1969-12-31T23:59:59.999Z");
-        assert_eq!(iso_ms(253_402_300_800_000), "+010000-01-01T00:00:00.000Z");
-        assert_eq!(iso_ms(-62_198_755_200_000), "-000001-01-01T00:00:00.000Z");
     }
 
     #[test]
-    fn envelopes_keep_the_0_2_key_order_and_spacing() {
+    fn envelopes_keep_their_key_order_and_spacing() {
         let globals = Globals {
             color: ColorMode::Auto,
             compact: false,

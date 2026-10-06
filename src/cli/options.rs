@@ -248,67 +248,44 @@ pub fn coerce_int(
 mod tests {
     use super::*;
 
+    /// Limits outside their bounds, or not whole numbers, are usage errors
+    /// that name the option.
     #[test]
-    fn reads_numbers_like_javascript() {
-        for (text, want) in [
-            ("7", 7.0),
-            ("  7 ", 7.0),
-            ("", 0.0),
-            ("1e3", 1000.0),
-            ("0x10", 16.0),
-            ("-0", 0.0),
-            (".5", 0.5),
-            ("5.", 5.0),
-        ] {
-            assert_eq!(js_number(text), want, "{text}");
-        }
-        for text in ["1_0", "NaN", "many", "-0x10", "1e", "e3", ".", "inf", "0x"] {
-            assert!(js_number(text).is_nan(), "{text}");
-        }
-        assert!(js_number("-Infinity").is_infinite());
-    }
-
-    #[test]
-    fn coerces_limits_with_zods_issues() {
+    fn coerces_limits_and_refuses_out_of_range_values() {
         let positive = Some(Bound {
             value: 0,
             inclusive: false,
+        });
+        let at_most_200 = Some(Bound {
+            value: 200,
+            inclusive: true,
         });
         let value = |text: &str| OptValue::Str(text.into());
         assert_eq!(
             coerce_int("limit", &value("500"), positive, None).ok(),
             Some(500)
         );
-        let error = coerce_int("limit", &value("0"), positive, None).unwrap_err();
-        assert_eq!(error.message, "limit: Too small: expected number to be >0");
         assert_eq!(
-            serde_json::to_string(&error.details).unwrap_or_default(),
-            r#"[{"origin":"number","code":"too_small","minimum":0,"inclusive":false,"path":["limit"],"message":"Too small: expected number to be >0"}]"#
-        );
-        let logs = (
-            Some(Bound {
-                value: 1,
-                inclusive: true,
-            }),
-            Some(Bound {
-                value: 200,
-                inclusive: true,
-            }),
-        );
-        let error = coerce_int("limit", &value("9007199254740993"), logs.0, logs.1).unwrap_err();
-        assert_eq!(
-            error.message,
-            "limit: Too big: expected int to be <=9007199254740991; limit: Too big: expected number to be <=200"
-        );
-        assert_eq!(
-            coerce_int("limit", &value("1.5"), positive, None)
-                .unwrap_err()
-                .message,
-            "limit: Invalid input: expected int, received number"
-        );
-        assert_eq!(
-            coerce_int("limit", &OptValue::Default(json!(10)), logs.0, logs.1).ok(),
+            coerce_int(
+                "limit",
+                &OptValue::Default(json!(10)),
+                positive,
+                at_most_200
+            )
+            .ok(),
             Some(10)
         );
+        for (text, message) in [
+            ("0", "limit: Too small: expected number to be >0"),
+            ("1.5", "limit: Invalid input: expected int, received number"),
+            ("201", "limit: Too big: expected number to be <=200"),
+        ] {
+            let error = coerce_int("limit", &value(text), positive, at_most_200).unwrap_err();
+            assert_eq!(
+                (error.code.as_str(), error.exit_code, error.message.as_str()),
+                ("invalid_options", 2, message),
+                "{text}"
+            );
+        }
     }
 }

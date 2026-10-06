@@ -308,20 +308,21 @@ pub fn completion(context: &Context) -> Result<Done, AppError> {
 mod tests {
     use super::*;
 
+    /// Every command word in the catalog completes once in each shell.
     #[test]
-    fn completions_list_every_command_word_once_in_order() {
-        let zsh = completion_script("zsh").expect("zsh");
-        assert!(zsh.starts_with("#compdef ultradian\n_ultradian() {\n  local -a commands\n  commands=(add cancel completion daemon describe doctor install list logs once pause prune"));
-        assert!(
-            completion_script("bash")
-                .expect("bash")
-                .ends_with("complete -F _ultradian_completion ultradian\n")
-        );
-        let fish = completion_script("fish").expect("fish");
-        assert_eq!(
-            fish.matches("complete -c ultradian -a '").count(),
-            tokens().len()
-        );
+    fn completions_offer_every_command_word_once() {
+        for shell in ["bash", "zsh", "fish"] {
+            let script = completion_script(shell).expect("a supported shell");
+            let words: Vec<&str> = script
+                .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+                .collect();
+            for command in &catalog::catalog().commands {
+                for word in &command.path {
+                    let count = words.iter().filter(|candidate| *candidate == word).count();
+                    assert_eq!(count, 1, "{word} in {shell}");
+                }
+            }
+        }
         assert!(completion_script("tcsh").is_none());
     }
 }
