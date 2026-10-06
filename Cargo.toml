@@ -33,4 +33,5 @@ opt-level = "s"
 lto = "fat"
 codegen-units = 1
 panic = "abort"
-strip = true
+# build.rs strips release binaries at link time instead; see link_args there.
+strip = false
