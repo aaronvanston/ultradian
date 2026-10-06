@@ -292,7 +292,6 @@ pub struct Context {
     /// Prompts are allowed: human mode, not --non-interactive, and both
     /// stdin and stderr are terminals.
     pub interactive: bool,
-    pub cwd: std::path::PathBuf,
     pub ui: Ui,
     pub arguments: Vec<ArgValue>,
     pub options: HashMap<String, OptValue>,
@@ -450,7 +449,6 @@ pub fn run(argv: &[String]) -> i32 {
     };
     let context = Context {
         interactive,
-        cwd: std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/")),
         ui: Ui::new(&globals),
         arguments: invocation.arguments,
         options: invocation.options,
