@@ -167,6 +167,18 @@ fn launch(
     })
 }
 
+/// Sleeps one tick in a single wait that a signal cuts short, so an idle
+/// daemon wakes once a tick rather than polling `stop`, and SIGTERM still
+/// stops it at once. (std's sleep resumes after a signal.)
+fn sleep_until_signal(duration: Duration) {
+    let request = libc::timespec {
+        tv_sec: libc::time_t::try_from(duration.as_secs()).unwrap_or(1),
+        tv_nsec: libc::c_long::from(duration.subsec_nanos()),
+    };
+    // SAFETY: nanosleep only reads `request`; the remainder isn't wanted.
+    unsafe { libc::nanosleep(&request, std::ptr::null_mut()) };
+}
+
 /// Runs until `stop` is set or another daemon takes the lock. Fires run
 /// concurrently; a schedule with a run still in flight is skipped and the
 /// skip recorded. On shutdown every fire in flight has its process group
@@ -282,9 +294,8 @@ pub fn run_daemon_loop(options: LoopOptions) -> Result<(), AppError> {
             Err(error) => log(&format!("tick failed: {}", error.message)),
         }
         inflight.retain(|fire| !fire.is_finished());
-        let wake = Instant::now() + TICK;
-        while Instant::now() < wake && !stop.load(Ordering::SeqCst) {
-            thread::sleep(Duration::from_millis(20));
+        if !stop.load(Ordering::SeqCst) {
+            sleep_until_signal(TICK);
         }
     }
 
