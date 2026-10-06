@@ -1,0 +1,15 @@
+# args: describe nothing here --json
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "command_not_found",
+    "message": "No command matches \"nothing here\".",
+    "hint": "Run 'ultradian schema --json' to list command paths."
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

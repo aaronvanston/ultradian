@@ -1,0 +1,7 @@
+# args: -qV
+# compare: full
+--- exit
+0
+--- stdout
+<VERSION>
+--- stderr

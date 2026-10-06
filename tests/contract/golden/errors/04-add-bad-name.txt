@@ -1,0 +1,14 @@
+# args: add 'bad name' --every 5m --yes --json -- echo hi
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "invalid_schedule_name",
+    "message": "Schedule names use letters, digits, dots, dashes, and underscores."
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

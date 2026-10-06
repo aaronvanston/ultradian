@@ -1,0 +1,22 @@
+# args: once --name import --timeout 30m --cwd <TMP>/work/m --json -- ./import.sh
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "once",
+  "data": {
+    "command": [
+      "./import.sh"
+    ],
+    "created_at": "<TIME>",
+    "cwd": "<TMP>/work/m",
+    "job": "once-import-<RAND>",
+    "job_id": "<job:1>",
+    "timeout_seconds": 1800
+  },
+  "ok": true,
+  "schemaVersion": 2,
+  "hint": "The daemon is not running; this job waits until it starts with 'ultradian daemon start'."
+}
+--- stderr

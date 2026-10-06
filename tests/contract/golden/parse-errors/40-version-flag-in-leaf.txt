@@ -1,0 +1,7 @@
+# args: add x --every 5m -V
+# compare: full
+--- exit
+0
+--- stdout
+<VERSION>
+--- stderr

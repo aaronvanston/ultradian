@@ -1,0 +1,15 @@
+# args: rm nobody --yes --jsonl
+# compare: full
+--- exit
+1
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "schedule_not_found",
+    "message": "No schedule named \"nobody\".",
+    "hint": "List schedules with 'list'."
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

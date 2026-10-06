@@ -1,0 +1,26 @@
+# args: logs --limit 500 --json
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "invalid_options",
+    "message": "limit: Too big: expected number to be <=200",
+    "details": [
+      {
+        "origin": "number",
+        "code": "too_big",
+        "maximum": 200,
+        "inclusive": true,
+        "path": [
+          "limit"
+        ],
+        "message": "Too big: expected number to be <=200"
+      }
+    ]
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

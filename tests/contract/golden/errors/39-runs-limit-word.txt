@@ -1,0 +1,25 @@
+# args: runs --limit many --json
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "invalid_options",
+    "message": "limit: Invalid input: expected number, received NaN",
+    "details": [
+      {
+        "expected": "number",
+        "code": "invalid_type",
+        "received": "NaN",
+        "path": [
+          "limit"
+        ],
+        "message": "Invalid input: expected number, received NaN"
+      }
+    ]
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

@@ -1,0 +1,41 @@
+# args: add --help
+# compare: exit
+--- exit
+0
+--- stdout
+
+Creates a schedule. With --gate, the gate command runs first on every fire: exit 0 with no stdout records a clean pass, exit 0 with stdout opens the gate and the stdout is piped to the command's stdin, and a nonzero exit records a gate failure.
+
+Usage: ultradian add [options] <name> <command...>
+
+Add a schedule with an optional gate
+
+Arguments:
+  name                   Schedule name
+  command                Command to run, after --
+
+Options:
+  --cron <expression>    Cron expression trigger
+  --tz <zone>            IANA time zone for the cron expression, defaulting to
+                         the machine's
+  --every <duration>     Interval trigger such as 30s, 15m, 2h, or 1d
+  --gate <command>       Gate command that decides whether the command runs
+  --gate-mode <mode>     When the gate opens: 'output' on exit 0 with stdout,
+                         'exit' on exit 0 alone
+  --timeout <duration>   Kill the gate or command after this long (such as 30m)
+  --catch-up <duration>  Fire once after downtime if no later than this (such as
+                         2h); 0 records a missed run instead
+  --cwd <dir>            Directory the gate and command run in, defaulting to
+                         the current one
+  --group <name>         Group this schedule with others under one heading
+  --dry-run              Show the schedule without saving it
+  -y, --yes              Confirm without prompting
+  -h, --help             display help for command
+
+Examples:
+  $ ultradian add nightly-backup --cron "0 2 * * *" -- ./backup.sh
+  $ ultradian add sentry-check --cron "0 * * * *" --gate "bun check-sentry.ts" -- claude -p "Investigate the issues on stdin"
+  $ ultradian add heartbeat --every 30s -- echo ok
+  $ ultradian add oneshot -- ./task.sh
+
+--- stderr

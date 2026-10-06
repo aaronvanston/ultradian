@@ -1,0 +1,17 @@
+# args: help --json
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+error: unknown command 'help'
+(Did you mean self?)
+(run 'ultradian <command> --help' for details)
+{
+  "error": {
+    "code": "invalid_usage",
+    "message": "error: unknown command 'help'\n(Did you mean self?)"
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

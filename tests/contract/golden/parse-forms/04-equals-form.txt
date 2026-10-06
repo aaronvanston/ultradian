@@ -1,0 +1,37 @@
+# args: add eq --every=5m --cwd=. --gate-mode=exit --timeout=1h --yes --json -- echo hi
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "add",
+  "data": {
+    "mode": "applied",
+    "schedule": {
+      "active": true,
+      "catch_up_seconds": 0,
+      "command": [
+        "echo",
+        "hi"
+      ],
+      "created_at": "<TIME>",
+      "cwd": "<TMP>/work",
+      "gate": null,
+      "gate_mode": "exit",
+      "group": null,
+      "id": "<schedule:3>",
+      "name": "eq",
+      "next_fire_at": "<TIME>",
+      "timeout_seconds": 3600,
+      "trigger": {
+        "kind": "every",
+        "seconds": 300
+      },
+      "updated_at": "<TIME>"
+    }
+  },
+  "ok": true,
+  "schemaVersion": 2,
+  "hint": "The daemon is not running; start it with 'ultradian daemon start'."
+}
+--- stderr

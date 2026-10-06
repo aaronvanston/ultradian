@@ -1,0 +1,15 @@
+# args: add flagval --every 5m --gate --json --yes -- echo hi
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "action_required",
+    "message": "This command needs explicit confirmation in non-interactive mode.",
+    "hint": "Preview with '--dry-run' or apply with '--yes'."
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

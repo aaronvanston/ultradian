@@ -1,0 +1,14 @@
+# args: add c1 --cron 'not a cron' --yes --json -- echo hi
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "invalid_cron",
+    "message": "Invalid cron expression \"not a cron\": CronPattern: invalid configuration format ('not a cron'), exactly five, six, or seven space separated parts are required."
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

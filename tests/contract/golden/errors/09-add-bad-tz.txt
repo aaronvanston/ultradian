@@ -1,0 +1,15 @@
+# args: add c3 --cron '0 9 * * *' --tz Mars/Olympus --yes --json -- echo hi
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "invalid_timezone",
+    "message": "Unknown time zone \"Mars/Olympus\".",
+    "hint": "Use an IANA zone name such as Australia/Sydney or America/New_York."
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

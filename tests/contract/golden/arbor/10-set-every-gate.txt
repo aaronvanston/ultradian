@@ -1,0 +1,33 @@
+# args: set arbor-y --every 1h --timeout 6h --catch-up 0 --gate 'sh "<TMP>/work/automation/gate.sh"' --gate-mode exit --cwd <TMP>/work/automation --json -- /bin/sh <TMP>/work/automation/run.sh
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "set",
+  "data": {
+    "active": true,
+    "catch_up_seconds": 0,
+    "command": [
+      "/bin/sh",
+      "<TMP>/work/automation/run.sh"
+    ],
+    "created_at": "<TIME>",
+    "cwd": "<TMP>/work/automation",
+    "gate": "sh \"<TMP>/work/automation/gate.sh\"",
+    "gate_mode": "exit",
+    "group": "arbor",
+    "id": "<schedule:2>",
+    "name": "arbor-y",
+    "next_fire_at": "<TIME>",
+    "timeout_seconds": 21600,
+    "trigger": {
+      "kind": "every",
+      "seconds": 3600
+    },
+    "updated_at": "<TIME>"
+  },
+  "ok": true,
+  "schemaVersion": 2
+}
+--- stderr

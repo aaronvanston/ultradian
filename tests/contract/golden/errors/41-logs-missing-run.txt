@@ -1,0 +1,14 @@
+# args: logs --run run_nope --json
+# compare: full
+--- exit
+1
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "run_not_found",
+    "message": "No run with id \"run_nope\"."
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

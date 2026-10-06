@@ -1,0 +1,15 @@
+# args: runs --since 4 --limit 500 --json
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "runs",
+  "data": {
+    "cursor": "4",
+    "runs": []
+  },
+  "ok": true,
+  "schemaVersion": 2
+}
+--- stderr

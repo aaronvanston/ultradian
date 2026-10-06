@@ -1,0 +1,47 @@
+# args: doctor --json
+# compare: exit
+--- exit
+0
+--- stdout
+{
+  "command": "doctor",
+  "data": {
+    "checks": [
+      {
+        "detail": "<TMP>/state",
+        "name": "Data directory",
+        "status": "pass"
+      },
+      {
+        "detail": "1 run(s), 0.0MB of captured logs",
+        "name": "Run history",
+        "status": "pass"
+      },
+      {
+        "detail": "not installed; 'daemon start' runs until logout or reboot",
+        "name": "Login service",
+        "status": "pass"
+      },
+      {
+        "detail": "not running",
+        "fix": "Start it with 'daemon start'.",
+        "name": "Daemon",
+        "status": "warn"
+      },
+      {
+        "detail": "Bun 1.3.14",
+        "name": "Bun runtime",
+        "status": "pass"
+      },
+      {
+        "detail": "darwin-arm64",
+        "name": "Operating system",
+        "status": "pass"
+      }
+    ],
+    "status": "warn"
+  },
+  "ok": true,
+  "schemaVersion": 2
+}
+--- stderr

@@ -1,0 +1,16 @@
+# args: add x --every 5m --yes --json
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+error: missing required argument 'command'
+(run 'ultradian <command> --help' for details)
+{
+  "error": {
+    "code": "invalid_usage",
+    "message": "error: missing required argument 'command'"
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

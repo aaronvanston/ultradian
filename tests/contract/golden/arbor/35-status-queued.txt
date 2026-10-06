@@ -1,0 +1,43 @@
+# args: status --json
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "status",
+  "data": {
+    "active_runs": [
+      {
+        "action_exit": null,
+        "cwd": "<TMP>/work/automation",
+        "executor": null,
+        "finished_at": null,
+        "gate_exit": null,
+        "log_pointer": "<TMP>/state/logs/arbor-y/<DATE>/<run:2>.log",
+        "machine_id": "<HOST>",
+        "pgid": null,
+        "run_id": "<run:2>",
+        "schedule": "arbor-y",
+        "schedule_id": "<schedule:2>",
+        "started_at": "<TIME>",
+        "status": "queued",
+        "trigger": "manual"
+      }
+    ],
+    "daemon": {
+      "heartbeat_at": null,
+      "live": false,
+      "pid": null,
+      "started_at": null,
+      "version": null
+    },
+    "schedules": {
+      "active": 3,
+      "paused": 0,
+      "total": 3
+    }
+  },
+  "ok": true,
+  "schemaVersion": 2
+}
+--- stderr

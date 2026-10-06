@@ -1,0 +1,35 @@
+# args: set argv --json -- printf '%s\n' one two
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "set",
+  "data": {
+    "active": true,
+    "catch_up_seconds": 0,
+    "command": [
+      "printf",
+      "%s\\n",
+      "one",
+      "two"
+    ],
+    "created_at": "<TIME>",
+    "cwd": "<TMP>/work",
+    "gate": null,
+    "gate_mode": "output",
+    "group": null,
+    "id": "<schedule:1>",
+    "name": "argv",
+    "next_fire_at": "<TIME>",
+    "timeout_seconds": null,
+    "trigger": {
+      "kind": "every",
+      "seconds": 300
+    },
+    "updated_at": "<TIME>"
+  },
+  "ok": true,
+  "schemaVersion": 2
+}
+--- stderr

@@ -1,0 +1,13 @@
+# args: completion zsh
+# compare: exit
+--- exit
+0
+--- stdout
+#compdef ultradian
+_ultradian() {
+  local -a commands
+  commands=(add cancel completion daemon describe doctor install list logs once pause prune restart resume rm run runs schema self set start status stop uninstall version)
+  _describe 'ultradian commands' commands
+}
+compdef _ultradian ultradian
+--- stderr

@@ -1,0 +1,128 @@
+# args: runs --limit 500 --json
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "runs",
+  "data": {
+    "cursor": "42",
+    "runs": [
+      {
+        "action_exit": 0,
+        "cwd": "<TMP>/work/a",
+        "executor": "sh",
+        "finished_at": "<TIME>",
+        "gate_exit": 0,
+        "log_pointer": "<TMP>/state/logs/d-open/<DATE>/<run:1>.log",
+        "machine_id": "<HOST>",
+        "pgid": <PID>,
+        "run_id": "<run:1>",
+        "schedule": "d-open",
+        "schedule_id": "<schedule:1>",
+        "started_at": "<TIME>",
+        "status": "succeeded",
+        "trigger": "manual"
+      },
+      {
+        "action_exit": null,
+        "cwd": "<TMP>/work/a",
+        "executor": null,
+        "finished_at": "<TIME>",
+        "gate_exit": 0,
+        "log_pointer": "<TMP>/state/logs/d-clean/<DATE>/<run:2>.log",
+        "machine_id": "<HOST>",
+        "pgid": <PID>,
+        "run_id": "<run:2>",
+        "schedule": "d-clean",
+        "schedule_id": "<schedule:2>",
+        "started_at": "<TIME>",
+        "status": "clean",
+        "trigger": "manual"
+      },
+      {
+        "action_exit": 0,
+        "cwd": "<TMP>/work/a",
+        "executor": "sh",
+        "finished_at": "<TIME>",
+        "gate_exit": 0,
+        "log_pointer": "<TMP>/state/logs/d-exit/<DATE>/<run:3>.log",
+        "machine_id": "<HOST>",
+        "pgid": <PID>,
+        "run_id": "<run:3>",
+        "schedule": "d-exit",
+        "schedule_id": "<schedule:3>",
+        "started_at": "<TIME>",
+        "status": "succeeded",
+        "trigger": "manual"
+      },
+      {
+        "action_exit": null,
+        "cwd": "<TMP>/work/a",
+        "executor": null,
+        "finished_at": "<TIME>",
+        "gate_exit": 3,
+        "log_pointer": "<TMP>/state/logs/d-gate-fail/<DATE>/<run:4>.log",
+        "machine_id": "<HOST>",
+        "pgid": <PID>,
+        "run_id": "<run:4>",
+        "schedule": "d-gate-fail",
+        "schedule_id": "<schedule:4>",
+        "started_at": "<TIME>",
+        "status": "gate_failed",
+        "trigger": "manual"
+      },
+      {
+        "action_exit": 4,
+        "cwd": "<TMP>/work/a",
+        "executor": "sh",
+        "finished_at": "<TIME>",
+        "gate_exit": null,
+        "log_pointer": "<TMP>/state/logs/d-fail/<DATE>/<run:5>.log",
+        "machine_id": "<HOST>",
+        "pgid": <PID>,
+        "run_id": "<run:5>",
+        "schedule": "d-fail",
+        "schedule_id": "<schedule:5>",
+        "started_at": "<TIME>",
+        "status": "failed",
+        "trigger": "manual"
+      },
+      {
+        "action_exit": null,
+        "cwd": "<TMP>/work/a",
+        "executor": "sh",
+        "finished_at": "<TIME>",
+        "gate_exit": null,
+        "log_pointer": "<TMP>/state/logs/d-timeout/<DATE>/<run:6>.log",
+        "machine_id": "<HOST>",
+        "pgid": <PID>,
+        "run_id": "<run:6>",
+        "schedule": "d-timeout",
+        "schedule_id": "<schedule:7>",
+        "started_at": "<TIME>",
+        "status": "timed_out",
+        "trigger": "manual"
+      },
+      {
+        "action_exit": null,
+        "cwd": "<TMP>/work/a",
+        "executor": "sh",
+        "finished_at": "<TIME>",
+        "gate_exit": null,
+        "log_pointer": "<TMP>/state/logs/d-slow/<DATE>/<run:7>.log",
+        "machine_id": "<HOST>",
+        "pgid": <PID>,
+        "run_id": "<run:7>",
+        "schedule": "d-slow",
+        "schedule_id": "<schedule:6>",
+        "started_at": "<TIME>",
+        "status": "canceled",
+        "trigger": "manual"
+      }
+    ]
+  },
+  "ok": true,
+  "schemaVersion": 2
+}
+--- stderr

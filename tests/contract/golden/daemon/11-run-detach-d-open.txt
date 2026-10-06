@@ -1,0 +1,27 @@
+# args: run d-open --detach --json
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "run",
+  "data": {
+    "action_exit": null,
+    "cwd": "<TMP>/work/a",
+    "executor": null,
+    "finished_at": null,
+    "gate_exit": null,
+    "log_pointer": "<TMP>/state/logs/d-open/<DATE>/<run:1>.log",
+    "machine_id": "<HOST>",
+    "pgid": null,
+    "run_id": "<run:1>",
+    "schedule": "d-open",
+    "schedule_id": "<schedule:1>",
+    "started_at": "<TIME>",
+    "status": "queued",
+    "trigger": "manual"
+  },
+  "ok": true,
+  "schemaVersion": 2
+}
+--- stderr

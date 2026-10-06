@@ -1,0 +1,57 @@
+# args: pause --group arbor --json
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "pause",
+  "data": [
+    {
+      "active": false,
+      "catch_up_seconds": 5400,
+      "command": [
+        "/bin/sh",
+        "<TMP>/work/automation/run.sh"
+      ],
+      "created_at": "<TIME>",
+      "cwd": "<TMP>/work/automation",
+      "gate": null,
+      "gate_mode": "output",
+      "group": "arbor",
+      "id": "<schedule:3>",
+      "name": "arbor-w",
+      "next_fire_at": null,
+      "timeout_seconds": 21600,
+      "trigger": {
+        "kind": "manual"
+      },
+      "updated_at": "<TIME>"
+    },
+    {
+      "active": false,
+      "catch_up_seconds": 3600,
+      "command": [
+        "/bin/sh",
+        "<TMP>/work/automation/run.sh"
+      ],
+      "created_at": "<TIME>",
+      "cwd": "<TMP>/work/automation",
+      "gate": null,
+      "gate_mode": "exit",
+      "group": "arbor",
+      "id": "<schedule:1>",
+      "name": "arbor-x",
+      "next_fire_at": null,
+      "timeout_seconds": 7200,
+      "trigger": {
+        "expression": "30 8 * * 1-5",
+        "kind": "cron",
+        "timezone": null
+      },
+      "updated_at": "<TIME>"
+    }
+  ],
+  "ok": true,
+  "schemaVersion": 2
+}
+--- stderr

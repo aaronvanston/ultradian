@@ -1,0 +1,16 @@
+# args: list -x --json
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+error: unknown option '-x'
+(run 'ultradian <command> --help' for details)
+{
+  "error": {
+    "code": "invalid_usage",
+    "message": "error: unknown option '-x'"
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

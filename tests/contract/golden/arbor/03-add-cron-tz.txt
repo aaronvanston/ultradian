@@ -1,0 +1,38 @@
+# args: add arbor-x --cron '0 9 * * *' --tz Australia/Sydney --timeout 6h --catch-up 30m --gate 'sh "<TMP>/work/automation/gate.sh"' --gate-mode exit --group arbor --cwd <TMP>/work/automation --yes --json -- /bin/sh <TMP>/work/automation/run.sh
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "add",
+  "data": {
+    "mode": "applied",
+    "schedule": {
+      "active": true,
+      "catch_up_seconds": 1800,
+      "command": [
+        "/bin/sh",
+        "<TMP>/work/automation/run.sh"
+      ],
+      "created_at": "<TIME>",
+      "cwd": "<TMP>/work/automation",
+      "gate": "sh \"<TMP>/work/automation/gate.sh\"",
+      "gate_mode": "exit",
+      "group": "arbor",
+      "id": "<schedule:1>",
+      "name": "arbor-x",
+      "next_fire_at": "<TIME>",
+      "timeout_seconds": 21600,
+      "trigger": {
+        "expression": "0 9 * * *",
+        "kind": "cron",
+        "timezone": "Australia/Sydney"
+      },
+      "updated_at": "<TIME>"
+    }
+  },
+  "ok": true,
+  "schemaVersion": 2,
+  "hint": "The daemon is not running; start it with 'ultradian daemon start'."
+}
+--- stderr

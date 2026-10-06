@@ -1,0 +1,14 @@
+# args: add c5 --cron '0 9 * * *' --every 5m --yes --json -- echo hi
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "conflicting_triggers",
+    "message": "Use either --cron or --every, not both."
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

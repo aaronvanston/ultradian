@@ -1,0 +1,10 @@
+# args: version
+# compare: exit
+--- exit
+0
+--- stdout
+◆ ultradian <VERSION>
+runtime  Bun 1.3.14
+target   darwin-arm64
+commit   bbcfb7c01ef5
+--- stderr

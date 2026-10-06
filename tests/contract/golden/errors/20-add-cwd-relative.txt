@@ -1,0 +1,37 @@
+# args: add d9 --every 5m --cwd d --yes --json -- echo hi
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "add",
+  "data": {
+    "mode": "applied",
+    "schedule": {
+      "active": true,
+      "catch_up_seconds": 0,
+      "command": [
+        "echo",
+        "hi"
+      ],
+      "created_at": "<TIME>",
+      "cwd": "<TMP>/work/d",
+      "gate": null,
+      "gate_mode": "output",
+      "group": null,
+      "id": "<schedule:2>",
+      "name": "d9",
+      "next_fire_at": "<TIME>",
+      "timeout_seconds": null,
+      "trigger": {
+        "kind": "every",
+        "seconds": 300
+      },
+      "updated_at": "<TIME>"
+    }
+  },
+  "ok": true,
+  "schemaVersion": 2,
+  "hint": "The daemon is not running; start it with 'ultradian daemon start'."
+}
+--- stderr

@@ -1,0 +1,28 @@
+# args: run arbor-y --detach --json
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "run",
+  "data": {
+    "action_exit": null,
+    "cwd": "<TMP>/work/automation",
+    "executor": null,
+    "finished_at": null,
+    "gate_exit": null,
+    "log_pointer": "<TMP>/state/logs/arbor-y/<DATE>/<run:2>.log",
+    "machine_id": "<HOST>",
+    "pgid": null,
+    "run_id": "<run:2>",
+    "schedule": "arbor-y",
+    "schedule_id": "<schedule:2>",
+    "started_at": "<TIME>",
+    "status": "queued",
+    "trigger": "manual"
+  },
+  "ok": true,
+  "schemaVersion": 2,
+  "hint": "The daemon is not running; this run waits until it starts with 'ultradian daemon start'."
+}
+--- stderr

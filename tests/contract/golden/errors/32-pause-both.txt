@@ -1,0 +1,14 @@
+# args: pause base --group arbor --json
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "conflicting_targets",
+    "message": "Give a schedule name or --group, one at a time."
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

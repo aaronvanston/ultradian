@@ -1,0 +1,51 @@
+# args: --help
+# compare: exit
+--- exit
+0
+--- stdout
+◆ ultradian <VERSION>
+Gated schedules and workflows for invoking AI
+
+Usage: ultradian [options] [command]
+
+Options:
+  -V, --version      Print version
+  --color <when>     Color output: auto, always, or never
+  --no-color         Disable color output
+  --json             Emit one structured JSON result
+  --jsonl            Emit versioned JSON event records
+  --compact          Compact JSON onto one line
+  --non-interactive  Never prompt or animate
+  --no-input         Alias for --non-interactive
+  -q, --quiet        Suppress warnings and hints
+  --verbose          Include verbose diagnostics
+  -h, --help         display help for command
+
+Commands:
+  add                Add a schedule with an optional gate
+  once               Run a command once under the daemon and record the outcome
+  list               List schedules and their latest run
+  run                Trigger a schedule now, in the foreground or queued for the
+                     daemon
+  runs               Emit run records for other tools
+  cancel             Cancel a queued or running run
+  status             Show daemon health and active runs
+  logs               Show recent runs and their captured output
+  set                Change any part of a schedule in place
+  pause              Stop triggering a schedule or group without removing it
+  resume             Start triggering a paused schedule or group again
+  rm                 Remove a schedule, keeping its run history
+  prune              Delete old runs and their log files
+  daemon             Run and manage the scheduling daemon
+  self               Manage this ultradian binary
+
+System commands:
+  version            Show detailed version and runtime information
+  doctor             Check the local install and configuration
+  schema             Print the machine-readable command catalog
+  describe           Describe one command and its contract
+  completion         Generate a shell completion script
+
+Discover contracts with 'ultradian schema --json' or 'ultradian describe <command>'.
+
+--- stderr

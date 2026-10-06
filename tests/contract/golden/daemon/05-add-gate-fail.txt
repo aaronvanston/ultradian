@@ -1,0 +1,37 @@
+# args: add d-gate-fail --every 1h --gate 'sh "<TMP>/work/a/gate-fail.sh"' --gate-mode exit --cwd <TMP>/work/a --yes --json -- /bin/sh <TMP>/work/a/run.sh
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "add",
+  "data": {
+    "mode": "applied",
+    "schedule": {
+      "active": true,
+      "catch_up_seconds": 0,
+      "command": [
+        "/bin/sh",
+        "<TMP>/work/a/run.sh"
+      ],
+      "created_at": "<TIME>",
+      "cwd": "<TMP>/work/a",
+      "gate": "sh \"<TMP>/work/a/gate-fail.sh\"",
+      "gate_mode": "exit",
+      "group": null,
+      "id": "<schedule:4>",
+      "name": "d-gate-fail",
+      "next_fire_at": "<TIME>",
+      "timeout_seconds": null,
+      "trigger": {
+        "kind": "every",
+        "seconds": 3600
+      },
+      "updated_at": "<TIME>"
+    }
+  },
+  "ok": true,
+  "schemaVersion": 2,
+  "hint": "The daemon is not running; start it with 'ultradian daemon start'."
+}
+--- stderr

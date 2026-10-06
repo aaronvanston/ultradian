@@ -1,0 +1,9 @@
+# args: bogus
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+error: unknown command 'bogus'
+(Did you mean logs?)
+(run 'ultradian <command> --help' for details)

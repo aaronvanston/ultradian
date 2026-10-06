@@ -1,0 +1,7 @@
+# args: version --jsonl
+# compare: full
+--- exit
+0
+--- stdout
+{"timestamp":"<TIME>","type":"result","command":"version","data":{"arch":"<ARCH>","bun":"<BUN>","commit":"<COMMIT>","name":"ultradian","platform":"<PLATFORM>","version":"<VERSION>"},"ok":true,"schemaVersion":2}
+--- stderr

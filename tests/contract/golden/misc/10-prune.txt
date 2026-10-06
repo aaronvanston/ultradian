@@ -1,0 +1,15 @@
+# args: prune --older-than 1d --yes --json
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "prune",
+  "data": {
+    "freed_bytes": 0,
+    "removed_runs": 0
+  },
+  "ok": true,
+  "schemaVersion": 2
+}
+--- stderr

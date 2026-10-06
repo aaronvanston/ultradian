@@ -1,0 +1,22 @@
+# args: once --json -- /usr/bin/true
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "once",
+  "data": {
+    "command": [
+      "/usr/bin/true"
+    ],
+    "created_at": "<TIME>",
+    "cwd": "<TMP>/work",
+    "job": "once-true-<RAND>",
+    "job_id": "<job:2>",
+    "timeout_seconds": null
+  },
+  "ok": true,
+  "schemaVersion": 2,
+  "hint": "The daemon is not running; this job waits until it starts with 'ultradian daemon start'."
+}
+--- stderr

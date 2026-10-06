@@ -1,0 +1,14 @@
+# args: add d7 --every 5m --catch-up 0h --yes --json -- echo hi
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "invalid_duration",
+    "message": "Expected a duration like 30s, 15m, 2h, or 1d, received \"0h\"."
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

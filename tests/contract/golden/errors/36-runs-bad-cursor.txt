@@ -1,0 +1,15 @@
+# args: runs --since abc --json
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "invalid_cursor",
+    "message": "\"abc\" is not a runs cursor.",
+    "hint": "Pass the cursor a previous 'runs' call returned, or omit --since to start from the beginning."
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

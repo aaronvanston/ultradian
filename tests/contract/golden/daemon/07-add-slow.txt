@@ -1,0 +1,37 @@
+# args: add d-slow --every 1h --cwd <TMP>/work/a --yes --json -- /bin/sh <TMP>/work/a/slow.sh
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "add",
+  "data": {
+    "mode": "applied",
+    "schedule": {
+      "active": true,
+      "catch_up_seconds": 0,
+      "command": [
+        "/bin/sh",
+        "<TMP>/work/a/slow.sh"
+      ],
+      "created_at": "<TIME>",
+      "cwd": "<TMP>/work/a",
+      "gate": null,
+      "gate_mode": "output",
+      "group": null,
+      "id": "<schedule:6>",
+      "name": "d-slow",
+      "next_fire_at": "<TIME>",
+      "timeout_seconds": null,
+      "trigger": {
+        "kind": "every",
+        "seconds": 3600
+      },
+      "updated_at": "<TIME>"
+    }
+  },
+  "ok": true,
+  "schemaVersion": 2,
+  "hint": "The daemon is not running; start it with 'ultradian daemon start'."
+}
+--- stderr

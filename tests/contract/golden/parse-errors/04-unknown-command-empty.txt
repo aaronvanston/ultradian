@@ -1,0 +1,16 @@
+# args: '' --json
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+error: unknown command ''
+(run 'ultradian <command> --help' for details)
+{
+  "error": {
+    "code": "invalid_usage",
+    "message": "error: unknown command ''"
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

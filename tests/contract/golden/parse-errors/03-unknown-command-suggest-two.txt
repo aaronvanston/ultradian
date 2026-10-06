@@ -1,0 +1,17 @@
+# args: lst --json
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+error: unknown command 'lst'
+(Did you mean one of list, ls?)
+(run 'ultradian <command> --help' for details)
+{
+  "error": {
+    "code": "invalid_usage",
+    "message": "error: unknown command 'lst'\n(Did you mean one of list, ls?)"
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

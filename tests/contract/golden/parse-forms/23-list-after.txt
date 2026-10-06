@@ -1,0 +1,315 @@
+# args: list --json
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "list",
+  "data": [
+    {
+      "last_finished_at": null,
+      "last_status": null,
+      "schedule": {
+        "active": true,
+        "catch_up_seconds": 0,
+        "command": [
+          "echo",
+          "hi"
+        ],
+        "created_at": "<TIME>",
+        "cwd": "<TMP>/work",
+        "gate": null,
+        "gate_mode": "output",
+        "group": null,
+        "id": "<schedule:4>",
+        "name": "after",
+        "next_fire_at": "<TIME>",
+        "timeout_seconds": null,
+        "trigger": {
+          "kind": "every",
+          "seconds": 600
+        },
+        "updated_at": "<TIME>"
+      },
+      "total_runs": 0
+    },
+    {
+      "last_finished_at": null,
+      "last_status": null,
+      "schedule": {
+        "active": true,
+        "catch_up_seconds": 0,
+        "command": [
+          "printf",
+          "%s\\n",
+          "one",
+          "two"
+        ],
+        "created_at": "<TIME>",
+        "cwd": "<TMP>/work",
+        "gate": null,
+        "gate_mode": "output",
+        "group": null,
+        "id": "<schedule:1>",
+        "name": "argv",
+        "next_fire_at": "<TIME>",
+        "timeout_seconds": null,
+        "trigger": {
+          "kind": "every",
+          "seconds": 7200
+        },
+        "updated_at": "<TIME>"
+      },
+      "total_runs": 0
+    },
+    {
+      "last_finished_at": null,
+      "last_status": null,
+      "schedule": {
+        "active": true,
+        "catch_up_seconds": 0,
+        "command": [
+          "echo",
+          "--json",
+          "--every",
+          "-y",
+          "--",
+          "tail"
+        ],
+        "created_at": "<TIME>",
+        "cwd": "<TMP>/work",
+        "gate": null,
+        "gate_mode": "output",
+        "group": null,
+        "id": "<schedule:6>",
+        "name": "argv2",
+        "next_fire_at": "<TIME>",
+        "timeout_seconds": null,
+        "trigger": {
+          "kind": "every",
+          "seconds": 300
+        },
+        "updated_at": "<TIME>"
+      },
+      "total_runs": 0
+    },
+    {
+      "last_finished_at": null,
+      "last_status": null,
+      "schedule": {
+        "active": true,
+        "catch_up_seconds": 0,
+        "command": [
+          "echo",
+          "hi"
+        ],
+        "created_at": "<TIME>",
+        "cwd": "<TMP>/work",
+        "gate": null,
+        "gate_mode": "output",
+        "group": null,
+        "id": "<schedule:5>",
+        "name": "before",
+        "next_fire_at": "<TIME>",
+        "timeout_seconds": null,
+        "trigger": {
+          "kind": "every",
+          "seconds": 600
+        },
+        "updated_at": "<TIME>"
+      },
+      "total_runs": 0
+    },
+    {
+      "last_finished_at": null,
+      "last_status": null,
+      "schedule": {
+        "active": true,
+        "catch_up_seconds": 0,
+        "command": [
+          "echo",
+          "--dry-run"
+        ],
+        "created_at": "<TIME>",
+        "cwd": "<TMP>/work",
+        "gate": null,
+        "gate_mode": "output",
+        "group": null,
+        "id": "<schedule:8>",
+        "name": "dd",
+        "next_fire_at": null,
+        "timeout_seconds": null,
+        "trigger": {
+          "kind": "manual"
+        },
+        "updated_at": "<TIME>"
+      },
+      "total_runs": 0
+    },
+    {
+      "last_finished_at": null,
+      "last_status": null,
+      "schedule": {
+        "active": true,
+        "catch_up_seconds": 0,
+        "command": [
+          "echo",
+          "hi"
+        ],
+        "created_at": "<TIME>",
+        "cwd": "<TMP>/work",
+        "gate": null,
+        "gate_mode": "exit",
+        "group": null,
+        "id": "<schedule:3>",
+        "name": "eq",
+        "next_fire_at": "<TIME>",
+        "timeout_seconds": 3600,
+        "trigger": {
+          "kind": "every",
+          "seconds": 300
+        },
+        "updated_at": "<TIME>"
+      },
+      "total_runs": 0
+    },
+    {
+      "last_finished_at": null,
+      "last_status": null,
+      "schedule": {
+        "active": true,
+        "catch_up_seconds": 0,
+        "command": [
+          "echo",
+          "hi"
+        ],
+        "created_at": "<TIME>",
+        "cwd": "<TMP>/work",
+        "gate": "--dry-run",
+        "gate_mode": "output",
+        "group": null,
+        "id": "<schedule:7>",
+        "name": "flagval",
+        "next_fire_at": "<TIME>",
+        "timeout_seconds": null,
+        "trigger": {
+          "kind": "every",
+          "seconds": 300
+        },
+        "updated_at": "<TIME>"
+      },
+      "total_runs": 0
+    },
+    {
+      "last_finished_at": null,
+      "last_status": null,
+      "schedule": {
+        "active": true,
+        "catch_up_seconds": 0,
+        "command": [
+          "echo",
+          "hi"
+        ],
+        "created_at": "<TIME>",
+        "cwd": "<TMP>/work",
+        "gate": null,
+        "gate_mode": "output",
+        "group": null,
+        "id": "<schedule:9>",
+        "name": "nodash",
+        "next_fire_at": "<TIME>",
+        "timeout_seconds": null,
+        "trigger": {
+          "kind": "every",
+          "seconds": 300
+        },
+        "updated_at": "<TIME>"
+      },
+      "total_runs": 0
+    },
+    {
+      "last_finished_at": null,
+      "last_status": null,
+      "schedule": {
+        "active": true,
+        "catch_up_seconds": 0,
+        "command": [
+          "echo",
+          "--json"
+        ],
+        "created_at": "<TIME>",
+        "cwd": "<TMP>/work",
+        "gate": null,
+        "gate_mode": "output",
+        "group": null,
+        "id": "<schedule:12>",
+        "name": "pf",
+        "next_fire_at": "<TIME>",
+        "timeout_seconds": null,
+        "trigger": {
+          "kind": "every",
+          "seconds": 300
+        },
+        "updated_at": "<TIME>"
+      },
+      "total_runs": 0
+    },
+    {
+      "last_finished_at": null,
+      "last_status": null,
+      "schedule": {
+        "active": true,
+        "catch_up_seconds": 0,
+        "command": [
+          "echo",
+          "hi"
+        ],
+        "created_at": "<TIME>",
+        "cwd": "<TMP>/work",
+        "gate": null,
+        "gate_mode": "output",
+        "group": null,
+        "id": "<schedule:10>",
+        "name": "short2",
+        "next_fire_at": "<TIME>",
+        "timeout_seconds": null,
+        "trigger": {
+          "kind": "every",
+          "seconds": 300
+        },
+        "updated_at": "<TIME>"
+      },
+      "total_runs": 0
+    },
+    {
+      "last_finished_at": null,
+      "last_status": null,
+      "schedule": {
+        "active": true,
+        "catch_up_seconds": 0,
+        "command": [
+          "echo",
+          "hi"
+        ],
+        "created_at": "<TIME>",
+        "cwd": "<TMP>/work",
+        "gate": null,
+        "gate_mode": "output",
+        "group": null,
+        "id": "<schedule:11>",
+        "name": "twice",
+        "next_fire_at": "<TIME>",
+        "timeout_seconds": null,
+        "trigger": {
+          "kind": "every",
+          "seconds": 600
+        },
+        "updated_at": "<TIME>"
+      },
+      "total_runs": 0
+    }
+  ],
+  "ok": true,
+  "schemaVersion": 2
+}
+--- stderr

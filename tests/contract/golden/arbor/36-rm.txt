@@ -1,0 +1,15 @@
+# args: rm arbor-y --yes --json
+# compare: full
+--- exit
+0
+--- stdout
+{
+  "command": "rm",
+  "data": {
+    "id": "<schedule:2>",
+    "removed": "arbor-y"
+  },
+  "ok": true,
+  "schemaVersion": 2
+}
+--- stderr

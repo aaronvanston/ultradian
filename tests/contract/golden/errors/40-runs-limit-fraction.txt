@@ -1,0 +1,25 @@
+# args: runs --limit 1.5 --json
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "invalid_options",
+    "message": "limit: Invalid input: expected int, received number",
+    "details": [
+      {
+        "expected": "int",
+        "format": "safeint",
+        "code": "invalid_type",
+        "path": [
+          "limit"
+        ],
+        "message": "Invalid input: expected int, received number"
+      }
+    ]
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

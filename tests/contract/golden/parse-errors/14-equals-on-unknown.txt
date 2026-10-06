@@ -1,0 +1,16 @@
+# args: list --bogus=1 --json
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+error: unknown option '--bogus=1'
+(run 'ultradian <command> --help' for details)
+{
+  "error": {
+    "code": "invalid_usage",
+    "message": "error: unknown option '--bogus=1'"
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

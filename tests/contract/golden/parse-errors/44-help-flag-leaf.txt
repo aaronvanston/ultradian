@@ -1,0 +1,17 @@
+# args: list --help --json
+# compare: exit
+--- exit
+0
+--- stdout
+Usage: ultradian list|ls [options]
+
+List schedules and their latest run
+
+Options:
+  -h, --help  display help for command
+
+Examples:
+  $ ultradian list
+  $ ultradian list --json
+
+--- stderr

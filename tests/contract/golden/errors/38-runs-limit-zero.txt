@@ -1,0 +1,26 @@
+# args: runs --limit 0 --json
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "invalid_options",
+    "message": "limit: Too small: expected number to be >0",
+    "details": [
+      {
+        "origin": "number",
+        "code": "too_small",
+        "minimum": 0,
+        "inclusive": false,
+        "path": [
+          "limit"
+        ],
+        "message": "Too small: expected number to be >0"
+      }
+    ]
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

@@ -1,0 +1,12 @@
+# args: add pf --every 5m --yes -- echo --json
+# compare: exit
+--- exit
+0
+--- stdout
+[ok] Added pf
+name     pf
+trigger  every 5m
+command  echo --json
+next     in <REL>
+--- stderr
+hint: The daemon is not running; start it with 'ultradian daemon start'.

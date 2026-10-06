@@ -1,0 +1,14 @@
+# args: add c4 --every 5m --tz UTC --yes --json -- echo hi
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "timezone_requires_cron",
+    "message": "--tz applies to --cron triggers only."
+  },
+  "ok": false,
+  "schemaVersion": 2
+}
