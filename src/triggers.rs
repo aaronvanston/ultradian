@@ -6,6 +6,7 @@ use serde::ser::{SerializeStruct, Serializer};
 
 use crate::cron::{self, Pattern, Zone};
 use crate::errors::AppError;
+use crate::zones::NamedZone;
 
 /// When a schedule fires. A cron trigger with no zone reads its expression
 /// in the machine's local time.
@@ -164,12 +165,10 @@ fn resolve_zone(name: &str) -> Option<(String, Zone)> {
         .iter()
         .find(|(retired, _)| retired.eq_ignore_ascii_case(name))
     {
-        let tz = chrono_tz::Tz::from_str_insensitive(target).ok()?;
-        return Some(((*retired).to_owned(), Zone::Named(tz)));
+        let zone = NamedZone::find(target)?;
+        return Some(((*retired).to_owned(), Zone::Named(zone)));
     }
-    chrono_tz::Tz::from_str_insensitive(name)
-        .ok()
-        .map(|tz| (tz.name().to_owned(), Zone::Named(tz)))
+    NamedZone::find(name).map(|zone| (zone.name().to_owned(), Zone::Named(zone)))
 }
 
 /// Checks a --tz value and returns the zone's own spelling, so

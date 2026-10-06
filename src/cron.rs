@@ -14,12 +14,12 @@
 //! zone (honoring TZ) when a schedule has none, resolved the way JavaScript's
 //! `new Date(y, m, d, ...)` resolves local times.
 
-use chrono::{Local, NaiveDateTime, Offset, TimeZone};
+use chrono::{Local, NaiveDateTime, TimeZone};
 
 /// A zone a cron expression is read in.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Zone {
-    Named(chrono_tz::Tz),
+    Named(crate::zones::NamedZone),
     /// Seconds east of UTC.
     Fixed(i64),
     /// The machine's zone, for schedules with none.
@@ -626,7 +626,7 @@ fn naive(ms: i64) -> Option<NaiveDateTime> {
 fn offset_ms(zone: Zone, instant: i64) -> i64 {
     let Some(utc) = naive(instant) else { return 0 };
     let seconds = match zone {
-        Zone::Named(tz) => i64::from(tz.offset_from_utc_datetime(&utc).fix().local_minus_utc()),
+        Zone::Named(zone) => zone.offset_seconds(utc.and_utc().timestamp()),
         Zone::Fixed(seconds) => seconds,
         Zone::Local => i64::from(Local.offset_from_utc_datetime(&utc).local_minus_utc()),
     };
