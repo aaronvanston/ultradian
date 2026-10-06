@@ -44,27 +44,7 @@ trap cleanup EXIT
 
 guard="$work/guard"
 mkdir -p "$guard"
-cat >"$guard/launchctl" <<'STUB'
-#!/bin/sh
-uid="$(id -u)"
-printf 'launchctl' >>"$STUB_LOG"
-for argument in "$@"; do
-  printf ' %s' "$(printf '%s' "$argument" | sed "s#gui/$uid#gui/<UID>#; s#$STUB_HOME#<HOME>#")" >>"$STUB_LOG"
-done
-printf '\n' >>"$STUB_LOG"
-case ",$STUB_FAIL," in *",$1,"*) echo "stub: $1 refused" >&2; exit 5 ;; esac
-stop_daemon() { "$STUB_DAEMON" daemon stop --json >/dev/null 2>&1 || true; }
-start_daemon() {
-  "$STUB_DAEMON" daemon run >>"$ULTRADIAN_HOME/daemon.out.log" 2>&1 </dev/null &
-  echo $! >>"$STUB_PIDS"
-}
-case "$1" in
-  bootstrap) start_daemon ;;
-  bootout) stop_daemon ;;
-  kickstart) stop_daemon; start_daemon ;;
-esac
-exit 0
-STUB
+cp "$root/tests/service/launchctl-stub" "$guard/launchctl"
 for tool in systemctl loginctl; do
   printf '#!/bin/sh\necho "%s $*" >>"$STUB_LOG"\nexit 97\n' "$tool" >"$guard/$tool"
 done

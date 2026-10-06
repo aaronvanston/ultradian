@@ -157,12 +157,15 @@ pub fn stop_daemon(store: &Store) -> Result<(Option<i64>, bool), AppError> {
             std::io::Error::last_os_error().to_string(),
         ));
     }
-    let attempts = (KILL_GRACE.as_millis() as u64 + 5000) / 100;
-    for _ in 0..attempts {
-        if !is_pid_alive(info.pid) {
-            return Ok((Some(info.pid), true));
-        }
-        sleep_ms(100);
+    // As 0.2.1: the grace a fire gets, plus five seconds; longer for a
+    // daemon that has released its lock (see wait_for_exit).
+    if wait_for_exit(
+        store,
+        info.pid,
+        KILL_GRACE + Duration::from_secs(5),
+        Duration::from_secs(30),
+    )? {
+        return Ok((Some(info.pid), true));
     }
     Err(AppError::new(
         "daemon_stop_timeout",
@@ -173,6 +176,30 @@ pub fn stop_daemon(store: &Store) -> Result<(Option<i64>, bool), AppError> {
         "Inspect the process manually: kill -9 {}",
         info.pid
     )))
+}
+
+/// Waits for a signaled daemon's pid to exit, up to `grace`, or up to
+/// `released_grace` once the daemon has released its lock row: it has
+/// finished shutting down, and 0.2.1 daemons then linger up to 15 s on a
+/// leftover timer (always when a run was in flight), which would otherwise
+/// fail an upgrade's `daemon install`. Only the pid exiting counts.
+fn wait_for_exit(
+    store: &Store,
+    pid: i64,
+    grace: Duration,
+    released_grace: Duration,
+) -> Result<bool, AppError> {
+    let started = std::time::Instant::now();
+    loop {
+        if !is_pid_alive(pid) {
+            return Ok(true);
+        }
+        let released = store.read_daemon()?.is_none_or(|holder| holder.pid != pid);
+        if started.elapsed() >= if released { released_grace } else { grace } {
+            return Ok(false);
+        }
+        sleep_ms(100);
+    }
 }
 
 /// The service file this machine would get.
@@ -396,4 +423,67 @@ pub fn install_self(target: &Path) -> Result<(PathBuf, bool), AppError> {
     let _ = std::fs::remove_file(&staging);
     result.map_err(io_error)?;
     Ok((destination, replaced))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::process::Child;
+
+    use super::*;
+    use crate::store::tests::temp_home;
+
+    /// A stand-in daemon this test spawns: it ignores SIGTERM and exits by
+    /// itself after `seconds`, like a 0.2.1 daemon on its leftover timer.
+    fn lingering(seconds: &str) -> Child {
+        Command::new("/bin/sh")
+            .args(["-c", &format!("trap '' TERM; sleep {seconds}")])
+            .spawn()
+            .expect("spawns")
+    }
+
+    fn hold_lock(store: &Store, pid: i64) {
+        store
+            .claim_daemon(pid, "0.2.1", now_ms(), |_| false)
+            .expect("claims");
+    }
+
+    #[test]
+    fn a_daemon_that_released_its_lock_gets_longer_to_exit() {
+        let home = temp_home();
+        let store = Store::open(&home).expect("opens");
+        let mut child = lingering("1");
+        let pid = i64::from(child.id());
+        store.clear_daemon(pid).expect("released");
+        let reaper = thread::spawn(move || child.wait());
+        let exited = wait_for_exit(
+            &store,
+            pid,
+            Duration::from_millis(300),
+            Duration::from_secs(5),
+        )
+        .expect("waits");
+        let _ = reaper.join();
+        assert!(exited);
+        let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn a_daemon_still_holding_its_lock_gets_the_usual_grace() {
+        let home = temp_home();
+        let store = Store::open(&home).expect("opens");
+        let mut child = lingering("2");
+        let pid = i64::from(child.id());
+        hold_lock(&store, pid);
+        let exited = wait_for_exit(
+            &store,
+            pid,
+            Duration::from_millis(300),
+            Duration::from_secs(5),
+        )
+        .expect("waits");
+        assert!(!exited);
+        let _ = child.kill();
+        let _ = child.wait();
+        let _ = std::fs::remove_dir_all(home);
+    }
 }
