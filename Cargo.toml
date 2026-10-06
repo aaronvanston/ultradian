@@ -19,7 +19,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 getrandom = "0.3"
 libc = "0.2"
 # bundled: SQLite links statically, so the binary needs no system library.
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.40", default-features = false, features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 # preserve_order: the embedded catalog is reprinted with its keys in the
 # order 0.2.1 wrote them, which isn't alphabetical.
