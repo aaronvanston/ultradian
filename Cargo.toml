@@ -2,7 +2,7 @@
 name = "ultradian"
 version = "0.3.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.97"
 description = "Gated schedules and workflows for invoking AI"
 license = "MIT"
 repository = "https://github.com/aaronvanston/ultradian"

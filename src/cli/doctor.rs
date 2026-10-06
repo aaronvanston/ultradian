@@ -183,14 +183,10 @@ fn platform() -> String {
 /// the build's own.
 pub fn doctor(context: &Context) -> Result<Done, AppError> {
     let mut checks = vec![data_directory()];
-    match Store::open(&resolve_home()) {
-        Ok(store) => {
-            checks.push(run_history(&store)?);
-            checks.push(login_service());
-            checks.push(daemon(&store)?);
-        }
-        Err(error) => return Err(error),
-    }
+    let store = Store::open(&resolve_home())?;
+    checks.push(run_history(&store)?);
+    checks.push(login_service());
+    checks.push(daemon(&store)?);
     checks.push(check(
         "Runtime",
         "pass",
