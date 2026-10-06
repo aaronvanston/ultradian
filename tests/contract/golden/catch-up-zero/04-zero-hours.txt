@@ -1,4 +1,4 @@
-# args: add d7 --every 5m --catch-up 0h --yes --json -- echo hi
+# args: add z3 --every 1h --catch-up 0h --yes --json -- echo hi
 # compare: full
 --- exit
 2

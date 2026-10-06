@@ -1,0 +1,14 @@
+# args: add z5 --every 0m --yes --json -- echo hi
+# compare: full
+--- exit
+2
+--- stdout
+--- stderr
+{
+  "error": {
+    "code": "invalid_duration",
+    "message": "Expected a duration like 30s, 15m, 2h, or 1d, received \"0m\"."
+  },
+  "ok": false,
+  "schemaVersion": 2
+}

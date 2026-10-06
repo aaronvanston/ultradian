@@ -92,6 +92,15 @@ impl Ui {
     pub fn muted(&self, value: &str) -> String {
         self.paint("\x1b[2m", "\x1b[22m", value)
     }
+    pub fn success(&self, value: &str) -> String {
+        self.paint("\x1b[32m", "\x1b[39m", value)
+    }
+    pub fn info(&self, value: &str) -> String {
+        self.paint("\x1b[34m", "\x1b[39m", value)
+    }
+    fn bold_dim(&self, value: &str) -> String {
+        self.heading(&self.paint("\x1b[2m", "\x1b[22m", value))
+    }
     pub fn warning(&self, value: &str) -> String {
         self.paint("\x1b[33m", "\x1b[39m", value)
     }
@@ -101,25 +110,40 @@ impl Ui {
     /// A left-aligned table: columns two spaces apart and at most 48 wide
     /// when padded, the header bold, trailing spaces trimmed.
     pub fn table(&self, headers: &[&str], rows: &[Vec<String>]) -> String {
-        let width = |text: &str| text.chars().count();
-        let widths: Vec<usize> = (0..headers.len())
-            .map(|column| {
-                let cells = std::iter::once(headers[column].to_owned()).chain(
-                    rows.iter()
-                        .map(|row| row.get(column).cloned().unwrap_or_default()),
-                );
-                cells.map(|cell| width(&cell)).max().unwrap_or(0).min(48)
-            })
-            .collect();
-        let render = |cells: Vec<String>, bold: bool| -> String {
+        self.sectioned_table(headers, &[(None, rows.to_vec())])
+    }
+
+    /// One table split into titled sections, the columns sized across all
+    /// of them.
+    pub fn sectioned_table(
+        &self,
+        headers: &[&str],
+        sections: &[(Option<String>, Vec<Vec<String>>)],
+    ) -> String {
+        let width = |text: &str| visible_width(text);
+        let all_rows = sections.iter().flat_map(|(_, rows)| rows.iter());
+        let mut widths: Vec<usize> = headers.iter().map(|header| width(header)).collect();
+        for row in all_rows {
+            for (column, cell) in row.iter().enumerate() {
+                if let Some(current) = widths.get_mut(column) {
+                    *current = (*current).max(width(cell));
+                }
+            }
+        }
+        for current in &mut widths {
+            *current = (*current).min(48);
+        }
+        let render = |cells: &[String], bold: bool| -> String {
             cells
                 .iter()
                 .enumerate()
                 .map(|(column, cell)| {
-                    let padded = format!(
-                        "{cell}{}",
-                        " ".repeat(widths[column].saturating_sub(width(cell)))
-                    );
+                    let pad = widths
+                        .get(column)
+                        .copied()
+                        .unwrap_or(0)
+                        .saturating_sub(width(cell));
+                    let padded = format!("{cell}{}", " ".repeat(pad));
                     if bold { self.heading(&padded) } else { padded }
                 })
                 .collect::<Vec<_>>()
@@ -127,11 +151,31 @@ impl Ui {
                 .trim_end()
                 .to_owned()
         };
-        let mut lines = vec![render(
-            headers.iter().map(|header| (*header).to_owned()).collect(),
-            true,
-        )];
-        lines.extend(rows.iter().map(|row| render(row.clone(), false)));
+        let header_cells: Vec<String> = headers.iter().map(|header| (*header).to_owned()).collect();
+        let mut lines = vec![render(&header_cells, true)];
+        for (title, rows) in sections {
+            if let Some(title) = title {
+                lines.push(String::new());
+                lines.push(self.bold_dim(title));
+            }
+            lines.extend(rows.iter().map(|row| render(row, false)));
+        }
         lines.join("\n")
     }
+}
+
+/// Characters on screen, ignoring color codes.
+fn visible_width(text: &str) -> usize {
+    let mut width = 0;
+    let mut escape = false;
+    for character in text.chars() {
+        if escape {
+            escape = !character.is_ascii_alphabetic();
+        } else if character == '\x1b' {
+            escape = true;
+        } else {
+            width += 1;
+        }
+    }
+    width
 }

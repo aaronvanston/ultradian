@@ -10,8 +10,6 @@ step list-empty full -- list --json
 step add-cron-tz full -- add arbor-x --cron "0 9 * * *" --tz Australia/Sydney --timeout 6h --catch-up 30m --gate "$gate" --gate-mode exit --group arbor --cwd "$WORK/automation" --yes --json -- /bin/sh "$WORK/automation/run.sh"
 step add-every full -- add arbor-y --every 15m --timeout 6h --catch-up 0 --group arbor --cwd "$WORK/automation" --yes --json -- /bin/sh "$WORK/automation/run.sh"
 step add-every-hours full -- add arbor-w --every 2h --timeout 6h --catch-up 90m --group arbor --cwd "$WORK/automation" --yes --json -- /bin/sh "$WORK/automation/run.sh"
-# grace_minutes = 0 sends --catch-up 0m: 0.2.1 rejects it, 0.3.0 accepts it.
-step add-catch-up-0m full -- add arbor-z --every 1h --timeout 6h --catch-up 0m --group arbor --cwd "$WORK/automation" --yes --json -- /bin/sh "$WORK/automation/run.sh"
 step list full -- list --json
 step list-alias full -- ls --json
 step set-cron full -- set arbor-x --cron "30 8 * * 1-5" --tz America/New_York --timeout 2h --catch-up 1h --cwd "$WORK/automation" --no-gate --json -- /bin/sh "$WORK/automation/run.sh"

@@ -4,6 +4,8 @@
 //! stderr.
 
 pub mod commander;
+mod options;
+mod schedules;
 mod system;
 mod version;
 
@@ -286,6 +288,10 @@ fn normalize(values: &HashMap<String, OptValue>) -> Result<Globals, AppError> {
 /// Everything a command gets to run with.
 pub struct Context {
     pub globals: Globals,
+    /// Prompts are allowed: human mode, not --non-interactive, and both
+    /// stdin and stderr are terminals.
+    pub interactive: bool,
+    pub cwd: std::path::PathBuf,
     pub ui: Ui,
     pub arguments: Vec<ArgValue>,
     pub options: HashMap<String, OptValue>,
@@ -316,6 +322,19 @@ fn dispatch(path: &str, context: &Context) -> Result<Done, AppError> {
         "version" => Ok(version::run(context)),
         "schema" => Ok(system::schema()),
         "describe" => system::describe(context),
+        "add" => schedules::add(context),
+        "once" => schedules::once(context),
+        "list" => schedules::list(context),
+        "run" => schedules::run(context),
+        "runs" => schedules::runs(context),
+        "cancel" => schedules::cancel(context),
+        "status" => schedules::status(context),
+        "logs" => schedules::logs(context),
+        "set" => schedules::set(context),
+        "pause" => schedules::toggle(context, false),
+        "resume" => schedules::toggle(context, true),
+        "rm" => schedules::rm(context),
+        "prune" => schedules::prune(context),
         _ => Err(AppError::new(
             "not_implemented",
             format!("'{NAME} {path}' is not implemented in this build yet."),
@@ -418,8 +437,17 @@ pub fn run(argv: &[String], io: &mut dyn Io) -> i32 {
         Err(error) => return render_error(&error, &preflight, &preflight_ui, io),
     };
     let path = invocation.path.join(" ");
+    let interactive = {
+        use std::io::IsTerminal;
+        globals.mode == Mode::Human
+            && !globals.non_interactive
+            && std::io::stdin().is_terminal()
+            && std::io::stderr().is_terminal()
+    };
     let context = Context {
         globals,
+        interactive,
+        cwd: std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/")),
         ui: Ui::new(&globals),
         arguments: invocation.arguments,
         options: invocation.options,

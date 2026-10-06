@@ -16,8 +16,6 @@ step add-duration-bad-unit full -- add d2 --every 5x --yes --json -- echo hi
 step add-duration-zero full -- add d3 --every 0m --yes --json -- echo hi
 step add-timeout-zero full -- add d4 --every 5m --timeout 0s --yes --json -- echo hi
 step add-catch-up-bad full -- add d5 --every 5m --catch-up soon --yes --json -- echo hi
-step add-catch-up-0s full -- add d6 --every 5m --catch-up 0s --yes --json -- echo hi
-step add-catch-up-0h full -- add d7 --every 5m --catch-up 0h --yes --json -- echo hi
 step add-missing-cwd full -- add d8 --every 5m --cwd "$WORK/nope" --yes --json -- echo hi
 step add-cwd-relative full -- add d9 --every 5m --cwd d --yes --json -- echo hi
 step add-dry-run full -- add plan --cron "0 2 * * *" --tz UTC --dry-run --json -- ./backup.sh
