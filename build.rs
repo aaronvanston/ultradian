@@ -191,7 +191,11 @@ fn zones() {
             (start, history.len())
         });
         joined.push_str(name);
-        zones.push_str(&format!("({}, {first}, {start}, {len}), ", joined.len()));
+        let first_time = times.get(start).copied().unwrap_or_default();
+        zones.push_str(&format!(
+            "({}, {first}, {start}, {len}, {first_time}), ",
+            joined.len()
+        ));
     }
     let list = |values: &[i64]| {
         values
@@ -200,6 +204,20 @@ fn zones() {
             .collect::<Vec<_>>()
             .join(",")
     };
+    // Each transition is stored as the seconds since the one before it in
+    // its zone (the first as 0, its time being in ZONES): four bytes where
+    // the times themselves, 1844 to 2099, need eight.
+    let deltas: Vec<i64> = (0..times.len())
+        .map(|index| {
+            let starts_run = runs.values().any(|&(start, _)| start == index);
+            let delta = if starts_run {
+                0
+            } else {
+                times[index] - times[index - 1]
+            };
+            i64::from(u32::try_from(delta).expect("transitions less than 136 years apart"))
+        })
+        .collect();
     // A zone's offsets come from a short list (about 120 values), so each
     // transition stores a one-byte index into it.
     let mut distinct = offsets.clone();
@@ -216,15 +234,17 @@ fn zones() {
         "/// Every name, joined; ZONES holds where each ends.\n\
          pub const NAMES: &str = {joined:?};\n\
          /// (end of the name in NAMES, offset before the first transition,\n\
-         /// first transition, transition count), sorted by lowercase name.\n\
-         pub static ZONES: [(u32, i32, u32, u32); {}] = [{zones}];\n\
-         pub static TIMES: [i64; {}] = [{}];\n\
+         /// first transition, transition count, time of the first\n\
+         /// transition), sorted by lowercase name.\n\
+         pub static ZONES: [(u32, i32, u32, u32, i64); {}] = [{zones}];\n\
+         /// Seconds from each transition's predecessor in its zone.\n\
+         pub static DELTAS: [u32; {}] = [{}];\n\
          /// Each transition's offset, as an index into OFFSET_VALUES.\n\
          pub static OFFSETS: [u8; {}] = [{}];\n\
          pub static OFFSET_VALUES: [i32; {}] = [{}];\n",
         names.len(),
-        times.len(),
-        list(&times),
+        deltas.len(),
+        list(&deltas),
         indexes.len(),
         list(&indexes),
         distinct.len(),
