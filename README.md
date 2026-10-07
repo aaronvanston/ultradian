@@ -124,7 +124,7 @@ The run records the id written to the file when there is a valid one (its first 
 `ultradian` and the short alias `udian` are the same program. Each release has a build for macOS and Linux on arm64 and x64, with a `SHA256SUMS` file to check them against.
 
 ```bash
-version=0.3.1
+version=0.4.0
 target=darwin-arm64   # or darwin-x64, linux-arm64, linux-x64
 curl -fLO "https://github.com/aaronvanston/ultradian/releases/download/v$version/ultradian-$version-$target.tar.gz"
 curl -fLO "https://github.com/aaronvanston/ultradian/releases/download/v$version/SHA256SUMS"

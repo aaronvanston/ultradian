@@ -1,6 +1,6 @@
 # ultradian command reference
 
-The commands of ultradian 0.3.0. This page is kept in step with `src/catalog.json` by hand; `ultradian schema --json` and `ultradian describe <command>` print the same catalog from the binary.
+The commands of ultradian 0.4.0. This page is kept in step with `src/catalog.json` by hand; `ultradian schema --json` and `ultradian describe <command>` print the same catalog from the binary.
 
 Gated schedules and workflows for invoking AI
 

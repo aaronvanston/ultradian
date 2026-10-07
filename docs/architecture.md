@@ -113,6 +113,12 @@ The run record is the public integration surface. It carries stable `schedule_id
 - an automatic update mechanism; and
 - commands loaded at runtime: every command is compiled in.
 
+## 0.4.0 notes
+
+0.4.0 ties each run to the agent session its action starts. The action receives `ULTRADIAN_AGENT_SESSION_ID`, a fresh UUID, and `ULTRADIAN_AGENT_SESSION_FILE`, where it can report an id of its own, and every run record gains `agent_session_id`, a string or null; see the runner above for the rule that picks it. The field is additive, so `schemaVersion` stays 2, though the record schemas in `schema --json` list it and still allow no other extra keys.
+
+The database moves to schema version 2, adding `runs.agent_session_id`; runs from earlier releases carry over with null. The step is one way: once 0.4.0 has opened a database, 0.3.1 and earlier refuse it with `database_too_new`, so going back means restoring a copy taken before the upgrade.
+
 ## 0.3.1 notes
 
 0.3.1 keeps 0.3.0's contract; it starts faster, is half the size and idles lighter. One edge moved: with `TZ` set to a name that isn't a zone, schedules without `--tz` now read UTC, as the C library does; 0.3.0 fell back to the machine's zone. Named zones and every valid `TZ` give the same next fires as before.
