@@ -359,3 +359,86 @@ fn never_signals_a_bogus_group() {
     assert!(!signal_group(1, 0));
     assert!(!signal_group(-5, 0));
 }
+
+#[test]
+fn the_action_is_handed_an_agent_session_the_gate_never_sees() {
+    let home = TempStore::new();
+    let gate = "printf '%s|%s\\n' \"${ULTRADIAN_AGENT_SESSION_ID-none}\" \"${ULTRADIAN_AGENT_SESSION_FILE-none}\"";
+    let action = "cat; echo \"id=$ULTRADIAN_AGENT_SESSION_ID\"; ls -ln \"$ULTRADIAN_AGENT_SESSION_FILE\" | cut -c1-10; [ -s \"$ULTRADIAN_AGENT_SESSION_FILE\" ] || echo empty";
+    let schedule = add(
+        &home,
+        "agent",
+        Some(gate),
+        "output",
+        &["/bin/sh", "-c", action],
+        None,
+    );
+    let run = fire(&home, &schedule);
+    assert_eq!(run.status, "succeeded");
+    let log = run_log(&run);
+    let id = log
+        .lines()
+        .find_map(|line| line.strip_prefix("id="))
+        .expect("the action printed its id");
+    // The command line names the variable, so the id it was handed is the
+    // session it started.
+    assert_eq!(run.agent_session_id.as_deref(), Some(id));
+    assert_eq!(id.len(), 36, "{id}");
+    assert!(log.contains("none|none\n"), "{log}");
+    // The file is private and empty when the action starts, and gone after.
+    assert!(log.contains("\n-rw-------\nempty\n"), "{log}");
+    assert!(!home.home.join("agent-sessions").join(&run.id).exists());
+}
+
+#[test]
+fn a_reported_session_id_wins_and_a_malformed_one_is_ignored() {
+    let report = |text: &str| format!("printf '{text}' >\"$ULTRADIAN_AGENT_SESSION_FILE\"");
+    let too_long = "x".repeat(129);
+    let cases = [
+        // A command that doesn't name the generated id records only a report.
+        ("true".to_owned(), None),
+        (
+            report("thread-01:a.b_c \\nsecond line\\n"),
+            Some("thread-01:a.b_c"),
+        ),
+        (report("id; echo hi"), None),
+        (report(&too_long), None),
+        // A valid report wins over the id the command was handed; a
+        // malformed one leaves that id in place.
+        (
+            format!(": \"$ULTRADIAN_AGENT_SESSION_ID\"; {}", report("reported")),
+            Some("reported"),
+        ),
+        (
+            format!(
+                "echo \"id=$ULTRADIAN_AGENT_SESSION_ID\"; {}",
+                report("not valid")
+            ),
+            Some("<generated>"),
+        ),
+    ];
+    let home = TempStore::new();
+    for (index, (script, expected)) in cases.iter().enumerate() {
+        let schedule = add(
+            &home,
+            &format!("report-{index}"),
+            None,
+            "output",
+            &["/bin/sh", "-c", script],
+            None,
+        );
+        let run = fire(&home, &schedule);
+        let log = run_log(&run);
+        let generated = log.lines().find_map(|line| line.strip_prefix("id="));
+        let expected = expected.map(|id| {
+            if id == "<generated>" {
+                generated.expect("printed")
+            } else {
+                id
+            }
+        });
+        assert_eq!(run.agent_session_id.as_deref(), expected, "{script}");
+        let rejected = log.contains("# agent session id ignored: not 1-128 characters");
+        assert_eq!(rejected, [2, 3, 5].contains(&index), "{log}");
+    }
+}

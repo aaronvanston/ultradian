@@ -38,6 +38,24 @@ fn create_id_at(prefix: &str, now_ms: i64) -> String {
     format!("{prefix}_{time:0>9}{}", random_chars(10))
 }
 
+/// A random UUID (version 4) in lowercase, the form `claude --session-id`
+/// takes.
+pub fn create_uuid() -> String {
+    let mut bytes = [0_u8; 16];
+    let _ = getrandom::fill(&mut bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+    format!(
+        "{}-{}-{}-{}-{}",
+        &hex[..8],
+        &hex[8..12],
+        &hex[12..16],
+        &hex[16..20],
+        &hex[20..]
+    )
+}
+
 /// A one-shot job still needs a name, because the name is what its run
 /// record and its log directory are filed under: a slug of the label plus
 /// enough entropy that two invocations never collide.
@@ -79,6 +97,23 @@ mod tests {
         assert_eq!(id.len(), "run_".len() + 19);
         assert!(id[4..].bytes().all(|byte| ALPHABET.contains(&byte)));
         assert!(create_id_at("run", 1) < create_id_at("run", 36));
+    }
+
+    #[test]
+    fn uuids_are_version_4_in_lowercase() {
+        let id = create_uuid();
+        let groups: Vec<&str> = id.split('-').collect();
+        assert_eq!(
+            groups.iter().map(|group| group.len()).collect::<Vec<_>>(),
+            [8, 4, 4, 4, 12]
+        );
+        assert!(
+            id.bytes()
+                .all(|byte| byte == b'-' || ALPHABET[..16].contains(&byte))
+        );
+        assert!(groups[2].starts_with('4'));
+        assert!(groups[3].starts_with(['8', '9', 'a', 'b']));
+        assert_ne!(id, create_uuid());
     }
 
     #[test]

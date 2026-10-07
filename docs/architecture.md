@@ -50,7 +50,7 @@ Handlers return data. JSON and JSONL serialize the same values the human rendere
 
 ### The store is the bus
 
-`src/store/` owns a SQLite database at `~/.ultradian/ultradian.db`, relocatable with `ULTRADIAN_HOME`. It holds `schedules`, `runs`, a single-row `daemon` table, and a `counters` table that gives every change to a run the next revision number, which is what `runs --since` pages by. Its schema version lives in SQLite's `user_version` and moves forward through ordered migrations; a database newer than the binary is refused with `database_too_new`, and one written by 0.1.x, before versions, is carried into the current shape in place with its schedules, run history and daemon lock. WAL journaling and a busy timeout let the CLI and the daemon hold it at the same time. The folder is `0700` and the database and logs `0600`.
+`src/store/` owns a SQLite database at `~/.ultradian/ultradian.db`, relocatable with `ULTRADIAN_HOME`. It holds `schedules`, `runs`, a single-row `daemon` table, and a `counters` table that gives every change to a run the next revision number, which is what `runs --since` pages by. Its schema version lives in SQLite's `user_version` and moves forward through ordered migrations: version 1 is the shape 0.2.0 through 0.3.1 write, and version 2 adds `runs.agent_session_id`. A database newer than the binary is refused with `database_too_new`, so once a release that writes version 2 has opened a database, 0.3.1 and earlier refuse it. One written by 0.1.x, before versions, is carried into the current shape in place with its schedules, run history and daemon lock. WAL journaling and a busy timeout let the CLI and the daemon hold it at the same time. The folder is `0700` and the database and logs `0600`.
 
 The store is the only channel between them. There is no socket, no RPC, and no running server to talk to. `add` inserts a row and the daemon picks it up on its next tick; `list`, `logs`, and `status` read rows and work exactly the same with the daemon stopped. A stopped daemon costs future fires, and it costs nothing else.
 
@@ -76,7 +76,15 @@ The run it produces is an ordinary run: the same statuses, the same day-partitio
 4. A zero exit with stdout opens the gate. The runner records the executor (the basename of the action's first argument) and spawns the action with that stdout as its stdin.
 5. The action's exit code decides `succeeded` or `failed`.
 
-Both processes inherit the environment plus `ULTRADIAN_RUN_ID` and `ULTRADIAN_SCHEDULE`; the action also receives `ULTRADIAN_SESSION_ID`. The schedule's recorded working directory is the cwd for both.
+Both processes inherit the environment plus `ULTRADIAN_RUN_ID` and `ULTRADIAN_SCHEDULE`; the action also receives `ULTRADIAN_SESSION_ID` (the run id again, kept for compatibility), `ULTRADIAN_AGENT_SESSION_ID` and `ULTRADIAN_AGENT_SESSION_FILE`. The schedule's recorded working directory is the cwd for both.
+
+The two agent session variables let a run be tied to the agent session its action starts. `ULTRADIAN_AGENT_SESSION_ID` is a fresh lowercase UUID v4 for each run, the form `claude --session-id` takes. `ULTRADIAN_AGENT_SESSION_FILE` is an empty `0600` file at `agent-sessions/<run_id>` in the home, for an agent that picks its own id, such as `codex exec`, to report it. The runner records one id on the run as `agent_session_id`:
+
+1. the file's first line, trimmed, when it is 1 to 128 characters of `A-Z a-z 0-9 . _ : -`; anything else there is ignored, with a `#` marker line in the log that leaves out what was written;
+2. otherwise the UUID, when any argument of the command contains `ULTRADIAN_AGENT_SESSION_ID`, since that is how the runner knows the action used it; this is set as soon as the action spawns, so a running run already carries it;
+3. otherwise nothing.
+
+The file is read and removed when the action ends, however it ends, as long as it started. The runner never looks for an id in the action's output or log. The action runs as argv, not through a shell, so a command reaches the variables through `sh -c '...'`.
 
 Each process starts in its own session and process group, whose id is stored on the run. A timeout, a `cancel` or a daemon shutdown sends the whole group `SIGTERM`, then `SIGKILL` ten seconds later, so children an action started in the background end with it. A run's log keeps its first 10MB of output and then a truncation marker; the finish marker is always written.
 
@@ -92,7 +100,7 @@ Startup recovery handles whatever the last process left behind. Runs still marke
 
 Each run writes one log file at `~/.ultradian/logs/<schedule>/<YYYY-MM-DD>/<run_id>.log`, holding gate and action stdout and stderr interleaved with `#` marker lines for start, gate outcome, action, and finish. The run row stores the path as `log_pointer`. The daemon's own lifecycle lines go to `~/.ultradian/daemon.log`, which it rotates at 5MB keeping three; anything it writes to stdout or stderr goes to `daemon.out.log`.
 
-The run record is the public integration surface. It carries stable `schedule_id` and `run_id` values, the machine id, the executor, the trigger, the status, both exit codes, timestamps, and the log pointer. Other tools consume that shape through `--json` and `--jsonl`. The run id is also the correlation handle for whatever the action invokes: a harness that tags its own artifacts with `ULTRADIAN_RUN_ID` can be joined back to the fire that spawned it.
+The run record is the public integration surface. It carries stable `schedule_id` and `run_id` values, the machine id, the executor, the trigger, the status, both exit codes, timestamps, the log pointer, and the agent session id when one is known. Other tools consume that shape through `--json` and `--jsonl`. The run id is also the correlation handle for whatever the action invokes: a harness that tags its own artifacts with `ULTRADIAN_RUN_ID` can be joined back to the fire that spawned it.
 
 ## Intentionally absent
 

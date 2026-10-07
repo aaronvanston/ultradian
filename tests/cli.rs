@@ -213,6 +213,7 @@ const QUEUED: &str = r#"{
   "command": "run",
   "data": {
     "action_exit": null,
+    "agent_session_id": null,
     "cwd": "<TMP>/work/automation",
     "executor": null,
     "finished_at": null,
@@ -598,12 +599,15 @@ fn a_daemon_started_directly_runs_gated_fires_and_stops() {
     for (name, script) in [
         ("open.sh", "echo \"gate context\"\n"),
         ("clean.sh", "exit 0\n"),
-        ("run.sh", "echo \"run $ULTRADIAN_SCHEDULE\"\ncat\n"),
+        (
+            "run.sh",
+            "echo \"run $ULTRADIAN_SCHEDULE\"\ncat\necho \"session $1\"\n",
+        ),
     ] {
         std::fs::write(folder.join(name), script).expect("script");
     }
     sandbox.ok(
-        "add open --every 1h --gate 'sh open.sh' --cwd automation --yes --json -- /bin/sh run.sh",
+        "add open --every 1h --gate 'sh open.sh' --cwd automation --yes --json -- /bin/sh -c 'sh run.sh \"$ULTRADIAN_AGENT_SESSION_ID\"'",
     );
     sandbox.ok(
         "add clean --every 1h --gate 'sh clean.sh' --cwd automation --yes --json -- /bin/sh run.sh",
@@ -626,11 +630,15 @@ fn a_daemon_started_directly_runs_gated_fires_and_stops() {
     );
     let log = std::fs::read_to_string(open["log_pointer"].as_str().expect("log")).expect("reads");
     assert!(log.contains("run open\ngate context\n"), "{log}");
+    // The command names the agent session variable, so the run records the
+    // id the action was handed.
+    let session = open["agent_session_id"].as_str().expect("a session id");
+    assert!(log.contains(&format!("\nsession {session}\n")), "{log}");
     let clean = sandbox.ok("run clean --detach --json");
     let clean = finished(&sandbox, clean["run_id"].as_str().expect("id"));
     has(
         &clean,
-        json!({"status": "clean", "gate_exit": 0, "action_exit": null, "executor": null}),
+        json!({"status": "clean", "gate_exit": 0, "action_exit": null, "executor": null, "agent_session_id": null}),
     );
 
     assert_eq!(

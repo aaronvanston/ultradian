@@ -42,6 +42,7 @@ impl Serialize for Seconds {
 #[derive(Serialize)]
 pub struct RunRecord {
     action_exit: Option<i64>,
+    agent_session_id: Option<String>,
     cwd: Option<String>,
     executor: Option<String>,
     finished_at: Option<String>,
@@ -60,6 +61,7 @@ pub struct RunRecord {
 pub fn run_record(run: &Run) -> RunRecord {
     RunRecord {
         action_exit: run.action_exit,
+        agent_session_id: run.agent_session_id.clone(),
         cwd: run.working_directory.clone(),
         executor: run.executor.clone(),
         finished_at: run.finished_at.map(iso_ms),
@@ -608,6 +610,9 @@ fn run_lines(record: &RunRecord, ui: &Ui) -> String {
     )];
     if let Some(executor) = &record.executor {
         lines.push(format!("{} {executor}", ui.muted("executor")));
+    }
+    if let Some(session) = &record.agent_session_id {
+        lines.push(format!("{}  {session}", ui.muted("session")));
     }
     if let Some(log) = &record.log_pointer {
         lines.push(format!("{}      {log}", ui.muted("log")));

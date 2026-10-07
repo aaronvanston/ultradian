@@ -691,9 +691,10 @@ fn group_ids_are_never_mistaken_for_live_processes() {
     assert!(!is_pid_alive(-1));
 }
 
-/// sqlite_master of a fresh database, as 0.2.1 created it: (type, name,
-/// table, sql). The SQL text is kept byte for byte, indentation included.
-const FRESH_SCHEMA: [(&str, &str, &str, Option<&str>); 12] = [
+/// sqlite_master of a version 1 database, as 0.2.1 through 0.3.1 created
+/// it: (type, name, table, sql). The SQL text is kept byte for byte,
+/// indentation included.
+const SCHEMA_V1: [(&str, &str, &str, Option<&str>); 12] = [
     (
         "table",
         "counters",
@@ -812,7 +813,7 @@ const FRESH_SCHEMA: [(&str, &str, &str, Option<&str>); 12] = [
 ];
 
 #[test]
-fn a_fresh_database_has_the_schema_0_2_1_created() {
+fn a_fresh_database_has_0_2_1s_schema_and_the_agent_session_column() {
     let temp = TempStore::new();
     let db = temp.raw();
     let mut query = db
@@ -825,15 +826,15 @@ fn a_fresh_database_has_the_schema_0_2_1_created() {
         .expect("reads")
         .collect::<std::result::Result<_, _>>()
         .expect("rows");
-    let want: Vec<(String, String, String, Option<String>)> = FRESH_SCHEMA
+    // SQLite records an added column by editing the table's SQL in place.
+    let want: Vec<(String, String, String, Option<String>)> = SCHEMA_V1
         .iter()
         .map(|(kind, name, table, sql)| {
-            (
-                (*kind).into(),
-                (*name).into(),
-                (*table).into(),
-                sql.map(str::to_owned),
-            )
+            let sql = sql.map(|sql| match *name {
+                "runs" => sql.replace("\n      )", "\n      , agent_session_id TEXT)"),
+                _ => sql.to_owned(),
+            });
+            ((*kind).into(), (*name).into(), (*table).into(), sql)
         })
         .collect();
     assert_eq!(rows, want);
@@ -845,7 +846,7 @@ fn a_fresh_database_has_the_schema_0_2_1_created() {
     assert_eq!(counter, ("runs".to_owned(), 0));
 }
 
-/// Rows 0.2.1 wrote for a cron schedule with a gate, an interval with an
+/// Rows 0.2.1 (and 0.3.x, which kept its shape) wrote for a cron schedule with a gate, an interval with an
 /// awkward command, a paused manual one, a one-shot job, a canceled run and
 /// a queued one.
 const ROWS_0_2_1: &str = r#"
@@ -859,11 +860,11 @@ INSERT INTO counters VALUES('runs',5);
 "#;
 
 #[test]
-fn reads_rows_exactly_as_0_2_1_wrote_them() {
+fn carries_a_version_1_database_over_reading_its_rows_as_written() {
     let temp = TempStore::empty();
     let db = temp.raw();
     let sql = |kind: &'static str| {
-        FRESH_SCHEMA
+        SCHEMA_V1
             .iter()
             .filter(move |row| row.0 == kind)
             .filter_map(|row| row.3)
@@ -928,6 +929,9 @@ fn reads_rows_exactly_as_0_2_1_wrote_them() {
         })
         .collect();
     assert_eq!(seen, [("hourly", "queued", 4), ("tick", "canceled", 5)]);
+    // Runs from before the agent session column carry it as null.
+    assert!(runs.iter().all(|run| run.agent_session_id.is_none()));
+    assert_eq!(user_version(&temp.raw()).expect("version"), SCHEMA_VERSION);
     assert_eq!(runs[1].finished_at, Some(1_791_267_582_762));
     assert_eq!(
         runs[1].log_pointer.as_deref(),

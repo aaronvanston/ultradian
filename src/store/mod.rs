@@ -1,7 +1,8 @@
 //! The SQLite store at `$ULTRADIAN_HOME/ultradian.db`, the only channel
 //! between the CLI and the daemon: schedules, runs, revision counters and
-//! the daemon lock. It writes exactly what 0.2.1 wrote, so either build can
-//! open the other's database (0.2.1 refuses anything past user_version 1).
+//! the daemon lock. A database from any earlier release opens and moves
+//! forward in place; one this release has opened is refused by releases
+//! before it, which stop at user_version 1.
 
 mod legacy;
 mod schema;
@@ -65,6 +66,9 @@ pub struct Run {
     pub owner_pid: i64,
     pub pgid: Option<i64>,
     pub revision: i64,
+    /// The agent session the action started, when it is known; see
+    /// `runner::execute_fire` for how it is decided.
+    pub agent_session_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -316,6 +320,7 @@ fn run_from_row(row: &Row) -> rusqlite::Result<Run> {
         owner_pid: row.get("owner_pid")?,
         pgid: row.get("pgid")?,
         revision: row.get("revision")?,
+        agent_session_id: row.get("agent_session_id")?,
     })
 }
 
@@ -338,7 +343,7 @@ pub struct Store {
 
 impl Store {
     /// Opens (creating if needed) the store in `home`, bringing its schema
-    /// to user_version 1.
+    /// to the latest user_version.
     pub fn open(home: &Path) -> Result<Self> {
         // Everything under the home is private to its owner: run logs hold
         // whatever gates and actions printed.
@@ -844,6 +849,14 @@ impl Store {
         self.db.execute(
             "UPDATE runs SET executor = ? WHERE id = ?",
             [executor, run_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_run_agent_session(&self, run_id: &str, agent_session_id: &str) -> Result<()> {
+        self.db.execute(
+            "UPDATE runs SET agent_session_id = ? WHERE id = ?",
+            [agent_session_id, run_id],
         )?;
         Ok(())
     }

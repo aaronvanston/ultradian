@@ -35,7 +35,7 @@ The compiler, clippy, and unit tests prove code correctness only; feature correc
 - JSON, JSONL, CI, piped, and non-interactive execution never prompt or animate.
 - Color is semantic, never the only signal, and must honor `NO_COLOR`, `TERM=dumb`, and `--color`.
 - The JSON envelopes, record shapes, error codes, and exit codes are the public contract, versioned by `schemaVersion`. Scripts parse the text, so key order, spacing, and number formatting are part of it.
-- The store is the only channel between the CLI and the daemon. Do not add sockets, RPC, or a second state file beside it. The schema stays at `user_version` 1 unless a migration is added on purpose.
+- The store is the only channel between the CLI and the daemon. Do not add sockets, RPC, or a second state file beside it. The schema stays at its current `user_version` (2) unless a migration is added on purpose.
 - Do not add backwards-compatibility shims or old/new dual code paths. Two are kept on purpose: the upgrade of 0.1 databases (`src/store/legacy.rs`) and the longer wait for a 0.2.x daemon that lingers after releasing its lock (`src/daemon/control.rs`).
 - Never touch the real `~/.ultradian`, a running daemon, or `~/Library/LaunchAgents`. `daemon install`, `restart`, and `uninstall` address the real user's launchd domain whatever HOME says, so anything that runs the binary uses a throwaway HOME and ULTRADIAN_HOME with `launchctl`, `systemctl`, and `loginctl` stubbed first on PATH, and signals only processes it started.
 - Secrets never reach run records, docs, or diagnostics. Captured run logs live outside the repo in `ULTRADIAN_HOME`.

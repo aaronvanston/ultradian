@@ -8,7 +8,7 @@ Gated schedules and workflows for invoking AI
 
 Add a schedule with an optional gate
 
-Creates a schedule. With --gate, the gate command runs first on every fire: exit 0 with no stdout records a clean pass, exit 0 with stdout opens the gate and the stdout is piped to the command's stdin, and a nonzero exit records a gate failure.
+Creates a schedule. With --gate, the gate command runs first on every fire: exit 0 with no stdout records a clean pass, exit 0 with stdout opens the gate and the stdout is piped to the command's stdin, and a nonzero exit records a gate failure. The command runs as argv, not through a shell. Each run hands it ULTRADIAN_AGENT_SESSION_ID, a fresh UUID to start an agent session with, and ULTRADIAN_AGENT_SESSION_FILE, a private file where it can report a session id of its own instead; run it under sh -c to use them. The run records the reported id as agent_session_id, or else the UUID when the command line names ULTRADIAN_AGENT_SESSION_ID.
 
 ### Options
 
@@ -29,6 +29,7 @@ Creates a schedule. With --gate, the gate command runs first on every fire: exit
 ```bash
 ultradian add nightly-backup --cron "0 2 * * *" -- ./backup.sh
 ultradian add sentry-check --cron "0 * * * *" --gate "bun check-sentry.ts" -- claude -p "Investigate the issues on stdin"
+ultradian add triage --cron "0 9 * * 1-5" -- sh -c 'claude -p --session-id "$ULTRADIAN_AGENT_SESSION_ID" "Triage new issues"'
 ultradian add heartbeat --every 30s -- echo ok
 ultradian add oneshot -- ./task.sh
 ```
@@ -287,7 +288,7 @@ ultradian run sentry-check --detach --json
 
 Emit run records for other tools
 
-Emits run records for other tools. This is the read surface: consumers ingest these records instead of touching the database. Every change to a run (queued, started, finished, canceled) gives it a new revision, and records come oldest change first. The output cursor is the last revision returned; hand it back with --since to receive only runs that changed after it, each in its latest state. Page with --limit. Pruned runs simply stop appearing.
+Emits run records for other tools. This is the read surface: consumers ingest these records instead of touching the database. Every change to a run (queued, started, finished, canceled) gives it a new revision, and records come oldest change first. The output cursor is the last revision returned; hand it back with --since to receive only runs that changed after it, each in its latest state. Page with --limit. Pruned runs simply stop appearing. A record's agent_session_id names the agent session its action started, when that is known, and is null otherwise.
 
 ### Options
 

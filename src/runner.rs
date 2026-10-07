@@ -380,11 +380,63 @@ fn basename(value: &str) -> String {
         .to_owned()
 }
 
+/// The longest agent session id an action may report.
+const MAX_SESSION_ID_LEN: usize = 128;
+
+/// An empty file only the owner can read, for the action to report the
+/// agent session it started in.
+fn open_session_file(home: &Path, run_id: &str) -> Result<PathBuf, String> {
+    let folder = home.join("agent-sessions");
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&folder)
+        .map_err(|error| error.to_string())?;
+    let path = folder.join(run_id);
+    OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&path)
+        .map_err(|error| error.to_string())?;
+    Ok(path)
+}
+
+/// Reads and removes the session file. The id is its first line, trimmed:
+/// `Ok(None)` when the action wrote nothing, `Err` when what it wrote
+/// isn't a short run of safe characters, so nothing else in the file can
+/// reach the run record.
+fn take_reported_session(path: &Path) -> Result<Option<String>, ()> {
+    let mut bytes = Vec::new();
+    if let Ok(file) = File::open(path) {
+        let _ = file.take(4096).read_to_end(&mut bytes);
+    }
+    let _ = std::fs::remove_file(path);
+    let text = String::from_utf8_lossy(&bytes);
+    let id = text.lines().next().unwrap_or_default().trim();
+    if id.is_empty() {
+        return Ok(None);
+    }
+    let safe = |c: char| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | ':' | '-');
+    if id.len() <= MAX_SESSION_ID_LEN && id.chars().all(safe) {
+        Ok(Some(id.to_owned()))
+    } else {
+        Err(())
+    }
+}
+
 /// Runs one fire and records how it ended. Gate contract in `output`
 /// mode: exit 0 with empty stdout closes the gate (a clean pass), exit 0
 /// with stdout opens it; in `exit` mode exit 0 alone opens it. Either way
 /// the gate's stdout becomes the action's stdin, and a nonzero exit is a
 /// gate failure. The schedule's timeout bounds gate and action together.
+///
+/// The action is handed a fresh UUID as `ULTRADIAN_AGENT_SESSION_ID` and
+/// an empty private file as `ULTRADIAN_AGENT_SESSION_FILE`. The run records
+/// the id the action wrote to that file, if it wrote a valid one;
+/// otherwise the UUID, if the command line names its variable; otherwise
+/// nothing. The action's output is never read for an id.
 pub fn execute_fire(
     store: &Store,
     schedule: &Schedule,
@@ -508,17 +560,47 @@ pub fn execute_fire(
             .set_run_executor(run_id, &executor)
             .map_err(|error| error.message)?;
         log_line(&log, &format!("# action: {}", schedule.command.join(" ")));
+        let agent_session_id = crate::ids::create_uuid();
+        let session_file = open_session_file(&store.home, run_id)?;
         let mut action_environment = environment.clone();
-        action_environment.push(("ULTRADIAN_SESSION_ID", run_id.to_owned()));
+        action_environment.extend([
+            ("ULTRADIAN_SESSION_ID", run_id.to_owned()),
+            ("ULTRADIAN_AGENT_SESSION_ID", agent_session_id.clone()),
+            (
+                "ULTRADIAN_AGENT_SESSION_FILE",
+                session_file.to_string_lossy().into_owned(),
+            ),
+        ]);
         let phase = Phase {
             argv: &schedule.command,
             cwd: &schedule.working_directory,
             environment: action_environment,
             stdin: schedule.gate.as_ref().map(|_| context.into_bytes()),
         };
+        let uses_generated = schedule
+            .command
+            .iter()
+            .any(|part| part.contains("ULTRADIAN_AGENT_SESSION_ID"));
         let outcome = run_phase(phase, &log, &mut watch, |pgid| {
             let _ = store.set_run_process_group(run_id, pgid);
-        })?;
+            if uses_generated {
+                let _ = store.set_run_agent_session(run_id, &agent_session_id);
+            }
+        });
+        let reported = take_reported_session(&session_file);
+        let outcome = outcome?;
+        match reported {
+            Ok(Some(reported)) => store
+                .set_run_agent_session(run_id, &reported)
+                .map_err(|error| error.message)?,
+            Ok(None) => {}
+            Err(()) => log_line(
+                &log,
+                &format!(
+                    "# agent session id ignored: not 1-{MAX_SESSION_ID_LEN} characters of A-Z a-z 0-9 . _ : -"
+                ),
+            ),
+        }
         if let Some(reason) = outcome.stopped {
             return settle(stopped_status(reason), gate_exit, None).map_err(|error| error.message);
         }

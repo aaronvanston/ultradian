@@ -1,7 +1,6 @@
 //! Table definitions and the ordered migrations that bring a database to
-//! user_version 1, the only version this release writes. The SQL text is
-//! 0.2.1's byte for byte, so sqlite_master reads the same whichever build
-//! created the file.
+//! the latest user_version. Step 1's SQL text is 0.2.1's byte for byte, so
+//! a database stopped there reads the same whichever build created it.
 
 use rusqlite::Connection;
 
@@ -84,7 +83,14 @@ pub fn create_tables(db: &Connection) -> rusqlite::Result<()> {
     )
 }
 
+/// Step 2, from user_version 1 to 2: the agent session a run's action
+/// started, which runs from before the step carry as null.
+pub fn add_agent_session_id(db: &Connection) -> rusqlite::Result<()> {
+    db.execute_batch("ALTER TABLE runs ADD COLUMN agent_session_id TEXT")
+}
+
 /// The steps, in order; the schema version is how many there are.
-pub const MIGRATIONS: [fn(&Connection) -> rusqlite::Result<()>; 1] = [create_tables];
+pub const MIGRATIONS: [fn(&Connection) -> rusqlite::Result<()>; 2] =
+    [create_tables, add_agent_session_id];
 
 pub const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;
