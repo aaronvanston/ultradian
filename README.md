@@ -99,6 +99,7 @@ Every run produces a record that any other tool can consume:
   "status": "succeeded",
   "gate_exit": 0,
   "action_exit": 0,
+  "agent_session_id": "0b9a4c3e-6f1d-4e2a-9c7b-5d8e1f2a3b4c",
   "started_at": "2026-08-06T09:00:00.412Z",
   "finished_at": "2026-08-06T09:03:41.006Z",
   "log_pointer": "~/.ultradian/logs/sentry-check/2026-08-06/run_0msgv8jw5gc3no3lrbu.log"
@@ -108,6 +109,15 @@ Every run produces a record that any other tool can consume:
 A run's status tells the loop's story: `queued` (waiting for the daemon), `running`, `clean` (the gate closed), `succeeded` or `failed` (the action ran), `gate_failed`, `timed_out` (the action outlived the schedule's `--timeout` and its process group was killed), `canceled` (stopped with `cancel`), `skipped` (the previous run was still in flight), `missed` (a fire passed while the daemon was down and outside the schedule's `--catch-up` window), and `interrupted` (the owning process died mid-run). The `trigger` says where the fire came from: `scheduled` (the daemon reached the next fire), `manual` (`run`), or `once` (a one-shot job).
 
 The record is the integration surface. Anything that wants to observe Ultradian or build on top of it consumes these records.
+
+`agent_session_id` ties a run to the agent session its action started. Each run hands the action a fresh UUID as `ULTRADIAN_AGENT_SESSION_ID`, which an agent that takes a session id can use, and a private file as `ULTRADIAN_AGENT_SESSION_FILE`, where an agent that picks its own id can report it. The action runs as argv, not through a shell, so reach the variables through `sh -c`:
+
+```bash
+udian add triage --cron "0 9 * * 1-5" \
+  -- sh -c 'claude -p --session-id "$ULTRADIAN_AGENT_SESSION_ID" "Triage new issues"'
+```
+
+The run records the id written to the file when there is a valid one (its first line: up to 128 letters, digits, `.`, `_`, `:` or `-`), otherwise the UUID when the command line names `ULTRADIAN_AGENT_SESSION_ID`, and otherwise null. Ultradian never reads the action's output to find one. `ULTRADIAN_SESSION_ID`, which actions also receive, is the run id, kept as it was.
 
 ## Install
 
