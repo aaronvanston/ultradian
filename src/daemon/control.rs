@@ -410,9 +410,11 @@ pub fn install_self(target: &Path) -> Result<(PathBuf, bool), AppError> {
     let result = (|| -> std::io::Result<()> {
         // A byte copy, not a clone, so no quarantine attribute travels along.
         let bytes = std::fs::read(std::env::current_exe()?)?;
+        // A fresh file only: whatever already sits at the staging name,
+        // a symlink included, is removed rather than followed.
+        let _ = std::fs::remove_file(&staging);
         let mut file = OpenOptions::new()
-            .create(true)
-            .truncate(true)
+            .create_new(true)
             .write(true)
             .mode(0o755)
             .open(&staging)?;
