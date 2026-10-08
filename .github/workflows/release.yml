@@ -25,7 +25,7 @@ jobs:
     outputs:
       version: ${{ steps.read.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: read
         name: Read Cargo.toml's version
         run: |
@@ -63,7 +63,7 @@ jobs:
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Add the target
         run: rustup target add ${{ matrix.target }}
       - name: Install musl tools
@@ -114,10 +114,11 @@ jobs:
           tar -tvzf "dist/$archive"
           [ "$(tar -tzf "dist/$archive")" = ultradian ] || { echo "the archive must hold one file named ultradian" >&2; exit 1; }
           ls -l "dist/$archive" "$stage/ultradian"
-      - uses: actions/upload-artifact@v7
+          echo "ARCHIVE=$archive" >>"$GITHUB_ENV"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: archive-${{ matrix.name }}
-          path: dist/
+          path: dist/${{ env.ARCHIVE }}
           if-no-files-found: error
 
   publish:
@@ -129,7 +130,7 @@ jobs:
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: archive-*
           path: release
@@ -137,9 +138,17 @@ jobs:
       - name: Write SHA256SUMS
         run: |
           cd release
-          : >SHA256SUMS
+          # Exactly the four archives, as regular files, and nothing else.
+          expected=""
           for name in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
-            sha256sum "ultradian-$VERSION-$name.tar.gz" >>SHA256SUMS
+            expected="$expected ultradian-$VERSION-$name.tar.gz"
+          done
+          [ "$(ls -A | sort)" = "$(printf '%s\n' $expected | sort)" ] || { echo "release/ holds: $(ls -A)" >&2; exit 1; }
+          : >SHA256SUMS
+          for archive in $expected; do
+            { [ -f "$archive" ] && [ ! -L "$archive" ]; } || { echo "$archive is not a regular file" >&2; exit 1; }
+            [ "$(tar -tzf "$archive")" = ultradian ] || { echo "$archive must hold one file named ultradian" >&2; exit 1; }
+            sha256sum "$archive" >>SHA256SUMS
           done
           cat SHA256SUMS
       - env:
@@ -147,7 +156,8 @@ jobs:
         run: |
           prerelease=""
           case "$VERSION" in *-*) prerelease="--prerelease" ;; esac
-          gh release create "$GITHUB_REF_NAME" release/* $prerelease \
+          cd release
+          gh release create "$GITHUB_REF_NAME" ultradian-"$VERSION"-*.tar.gz SHA256SUMS $prerelease \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
             --notes "Builds for macOS and Linux on arm64 and x64. Check an archive against SHA256SUMS, extract it, and run './ultradian self install'."
