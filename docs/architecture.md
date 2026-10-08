@@ -98,7 +98,7 @@ Startup recovery handles whatever the last process left behind. Runs still marke
 
 ### Records and logs
 
-Each run writes one log file at `~/.ultradian/logs/<schedule>/<YYYY-MM-DD>/<run_id>.log`, holding gate and action stdout and stderr interleaved with `#` marker lines for start, gate outcome, action, and finish. The run row stores the path as `log_pointer`. The daemon's own lifecycle lines go to `~/.ultradian/daemon.log`, which it rotates at 5MB keeping three; anything it writes to stdout or stderr goes to `daemon.out.log`.
+Each run writes one log file at `~/.ultradian/logs/<schedule>/<YYYY-MM-DD>/<run_id>.log`, holding gate and action stdout and stderr interleaved with `#` marker lines for start, gate outcome, action, and finish. Only the gate's stdout is also held in memory, as the action's context; the action's output goes to the log alone. The run row stores the path as `log_pointer`. The daemon's own lifecycle lines go to `~/.ultradian/daemon.log`, which it rotates at 5MB keeping three; anything it writes to stdout or stderr goes to `daemon.out.log`.
 
 The run record is the public integration surface. It carries stable `schedule_id` and `run_id` values, the machine id, the executor, the trigger, the status, both exit codes, timestamps, the log pointer, and the agent session id when one is known. Other tools consume that shape through `--json` and `--jsonl`. The run id is also the correlation handle for whatever the action invokes: a harness that tags its own artifacts with `ULTRADIAN_RUN_ID` can be joined back to the fire that spawned it.
 
