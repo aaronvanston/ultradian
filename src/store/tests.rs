@@ -123,6 +123,19 @@ fn a_fresh_database_lands_on_the_latest_version_and_reopens_cleanly() {
 }
 
 #[test]
+fn refuses_a_database_that_is_not_a_file_of_its_own() {
+    let home = TempStore::empty();
+    let elsewhere = home.home.join("elsewhere.db");
+    std::fs::write(&elsewhere, b"").expect("target");
+    std::os::unix::fs::symlink(&elsewhere, home.home.join("ultradian.db")).expect("link");
+    let Err(error) = Store::open(&home.home) else {
+        panic!("opened a database through a symlink")
+    };
+    assert_eq!(error.code, "unsafe_store");
+    assert_eq!(error.exit_code, exit::CONFIG);
+}
+
+#[test]
 fn refuses_a_database_written_by_a_newer_release() {
     let home = TempStore::empty();
     raw(&home.home)
