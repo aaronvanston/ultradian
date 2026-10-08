@@ -257,6 +257,9 @@ struct Phase<'a> {
     cwd: &'a str,
     environment: Vec<(&'static str, String)>,
     stdin: Option<Vec<u8>>,
+    /// Keep stdout in memory as well as logging it. Only the gate's is
+    /// read, as the action's context; the action's goes to the log alone.
+    keep_stdout: bool,
 }
 
 /// Runs one process as the leader of a new session and process group and
@@ -307,7 +310,7 @@ fn run_phase(
     let stdout = child
         .stdout
         .take()
-        .map(|stream| pump(stream, Arc::clone(log), true));
+        .map(|stream| pump(stream, Arc::clone(log), phase.keep_stdout));
     let stderr = child
         .stderr
         .take()
@@ -524,6 +527,7 @@ pub fn execute_fire(
                 cwd: &schedule.working_directory,
                 environment: environment.clone(),
                 stdin: None,
+                keep_stdout: true,
             };
             let outcome = run_phase(phase, &log, &mut watch, on_spawn)?;
             gate_exit = if outcome.stopped.is_none() {
@@ -576,6 +580,7 @@ pub fn execute_fire(
             cwd: &schedule.working_directory,
             environment: action_environment,
             stdin: schedule.gate.as_ref().map(|_| context.into_bytes()),
+            keep_stdout: false,
         };
         let uses_generated = schedule
             .command
