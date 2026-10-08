@@ -723,3 +723,31 @@ fn dry_runs_show_the_plan_and_write_nothing() {
     let home = std::fs::read_dir(sandbox.root.join("home")).expect("home");
     assert_eq!(home.count(), 0, "nothing is written under HOME");
 }
+
+#[test]
+fn a_run_log_reaches_the_terminal_with_its_control_characters_inert() {
+    let sandbox = Sandbox::new();
+    let out = sandbox.run(&[
+        "add",
+        "paint",
+        "--every",
+        "1d",
+        "--yes",
+        "--json",
+        "--",
+        "printf",
+        "\\033]0;title\\007\\033[31mred\\rplain\\n",
+    ]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let run = sandbox.ok("run paint --json");
+    let run_id = run["run_id"].as_str().expect("run id");
+    let human = sandbox.line(&format!("logs paint --run {run_id}")).stdout;
+    assert!(
+        human.contains("\\u{1b}]0;title\\u{7}\\u{1b}[31mred\\u{d}plain\n"),
+        "{human:?}"
+    );
+    assert!(!human.contains(['\x1b', '\x07', '\r']), "{human:?}");
+    let json = sandbox.ok(&format!("logs paint --run {run_id} --json"));
+    let content = json["log"]["content"].as_str().expect("content");
+    assert!(content.contains("\x1b]0;title\x07\x1b[31mred\rplain\n"));
+}
