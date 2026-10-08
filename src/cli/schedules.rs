@@ -814,7 +814,7 @@ pub fn logs(context: &Context) -> Result<Done, AppError> {
             runs: vec![run_record(&run)],
             total_runs: store.count_runs(Some(&run.schedule_name))?,
         };
-        return Ok(Done::new(&data, content));
+        return Ok(Done::new(&data, inert(&content)));
     }
     let runs = store.list_runs(schedule_name.as_deref(), limit)?;
     let data = Logs {
@@ -1053,6 +1053,21 @@ pub fn rm(context: &Context) -> Result<Done, AppError> {
     ))
 }
 
+/// Captured output made safe to print to a terminal: control characters
+/// other than newline and tab, and bidirectional overrides, are shown as
+/// escapes instead of acted on. JSON carries the output as it was.
+fn inert(text: &str) -> String {
+    let mut shown = String::with_capacity(text.len());
+    for character in text.chars() {
+        let bidi = matches!(character, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}');
+        if (character.is_control() && !matches!(character, '\n' | '\t')) || bidi {
+            shown.extend(character.escape_unicode());
+        } else {
+            shown.push(character);
+        }
+    }
+    shown
+}
 #[cfg(test)]
 mod tests {
     use super::*;
