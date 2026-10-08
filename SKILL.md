@@ -197,7 +197,7 @@ For an expected error:
 4. correct the input or configuration; and
 5. retry the exact intended command.
 
-Common codes: `schedule_not_found`, `schedule_exists`, `invalid_schedule_name`, `invalid_cron`, `invalid_timezone`, `timezone_requires_cron`, `invalid_duration`, `invalid_working_directory`, `conflicting_triggers`, `command_required`, `nothing_to_set`, `action_required`, `run_not_found`, `run_finished`, `run_in_flight`, `invalid_cursor`, `group_not_found`, `daemon_already_running`, `daemon_start_timeout`, `daemon_stop_timeout`, `daemon_install_failed`, `not_a_compiled_binary`, and `database_too_new`.
+Common codes: `schedule_not_found`, `schedule_exists`, `invalid_schedule_name`, `invalid_cron`, `invalid_timezone`, `timezone_requires_cron`, `invalid_duration`, `invalid_working_directory`, `conflicting_triggers`, `command_required`, `nothing_to_set`, `action_required`, `run_not_found`, `run_finished`, `run_in_flight`, `invalid_cursor`, `group_not_found`, `daemon_already_running`, `daemon_start_timeout`, `daemon_stop_timeout`, `daemon_install_failed`, `not_a_compiled_binary`, `database_too_new`, and `unsafe_store`.
 
 Useful diagnostics:
 

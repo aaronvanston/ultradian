@@ -7,7 +7,7 @@
 mod legacy;
 mod schema;
 
-use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -336,6 +336,35 @@ fn not_found(reference: &str) -> AppError {
     .hint("List schedules with 'list'.")
 }
 
+/// Makes the database and its WAL companions private to their owner,
+/// refusing any that is not a regular file owned by this user.
+fn secure_database_files(file: &Path) -> Result<()> {
+    let io = |error: std::io::Error| AppError::new("unexpected_error", error.to_string());
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    let user = unsafe { libc::geteuid() };
+    for suffix in ["", "-wal", "-shm"] {
+        let companion = PathBuf::from(format!("{}{suffix}", file.display()));
+        let metadata = match std::fs::symlink_metadata(&companion) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(io(error)),
+        };
+        if !metadata.file_type().is_file() || metadata.uid() != user {
+            return Err(AppError::new(
+                "unsafe_store",
+                format!(
+                    "{} is not a regular file owned by this user.",
+                    companion.display()
+                ),
+            )
+            .exit(exit::CONFIG)
+            .hint("Point ULTRADIAN_HOME at a folder only you have written to."));
+        }
+        std::fs::set_permissions(&companion, std::fs::Permissions::from_mode(0o600)).map_err(io)?;
+    }
+    Ok(())
+}
+
 pub struct Store {
     pub home: PathBuf,
     db: Connection,
@@ -358,6 +387,9 @@ impl Store {
                 .map_err(|error| AppError::new("unexpected_error", error.to_string()))?;
         }
         let file = home.join("ultradian.db");
+        // The database holds commands the daemon runs as this user, so one
+        // left in the folder by anyone else is refused, not opened.
+        secure_database_files(&file)?;
         let db = Connection::open(&file)?;
         // The busy timeout comes first so a second process opening a fresh
         // database waits for the first one's migration instead of failing.
@@ -368,13 +400,7 @@ impl Store {
             db,
         };
         store.migrate(&file)?;
-        for suffix in ["", "-wal", "-shm"] {
-            let companion = PathBuf::from(format!("{}{suffix}", file.display()));
-            if companion.exists() {
-                let _ =
-                    std::fs::set_permissions(&companion, std::fs::Permissions::from_mode(0o600));
-            }
-        }
+        secure_database_files(&file)?;
         Ok(store)
     }
 
