@@ -113,6 +113,10 @@ The run record is the public integration surface. It carries stable `schedule_id
 - an automatic update mechanism; and
 - commands loaded at runtime: every command is compiled in.
 
+## 0.4.1 notes
+
+0.4.1 keeps 0.4.0's contract and database, and hardens its edges. A database, WAL or shared-memory file that is a symlink or belongs to another user is refused with the new `unsafe_store` error, exit 78, instead of opened. The action's stdout is no longer held in memory beside its log. `logs --run` escapes control characters in human mode; `--json` is unchanged. `self install` creates its staging file fresh rather than following a link planted there.
+
 ## 0.4.0 notes
 
 0.4.0 ties each run to the agent session its action starts. The action receives `ULTRADIAN_AGENT_SESSION_ID`, a fresh UUID, and `ULTRADIAN_AGENT_SESSION_FILE`, where it can report an id of its own, and every run record gains `agent_session_id`, a string or null; see the runner above for the rule that picks it. The field is additive, so `schemaVersion` stays 2, though the record schemas in `schema --json` list it and still allow no other extra keys.
